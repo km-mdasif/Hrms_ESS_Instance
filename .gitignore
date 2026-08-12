@@ -1,0 +1,105 @@
+# ==========================================
+# Node.js + React Full Stack .gitignore
+# ==========================================
+
+# Dependencies
+node_modules/
+**/node_modules/
+
+# Environment Variables
+.env
+.env.*
+!.env.example
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+pnpm-debug.log*
+
+# React / Vite Build
+build/
+dist/
+**/build/
+**/dist/
+.vite/
+
+# Node.js Runtime
+*.pid
+*.seed
+*.pid.lock
+
+# Coverage
+coverage/
+.nyc_output/
+
+# Cache
+.cache/
+.parcel-cache/
+.eslintcache
+
+# Temporary Files
+tmp/
+temp/
+*.tmp
+*.temp
+
+# OS Files
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# IDE / Editors
+.vscode/*
+!.vscode/settings.json
+!.vscode/extensions.json
+!.vscode/launch.json
+!.vscode/tasks.json
+
+.idea/
+*.swp
+*.swo
+
+# Testing
+jest-results/
+test-results/
+
+# TypeScript
+*.tsbuildinfo
+
+# Database / Local Files
+*.sqlite
+*.sqlite3
+*.db
+
+# Uploads / User Files
+uploads/
+storage/
+
+# Backend generated files
+backend/dist/
+backend/build/
+server/dist/
+server/build/
+
+# Frontend generated files
+frontend/dist/
+frontend/build/
+client/dist/
+client/build/
+
+# Package manager files
+# Keep package-lock.json / yarn.lock / pnpm-lock.yaml
+
+# Security / Certificates
+*.pem
+*.key
+*.crt
+*.cert
+
+# Backup files
+*.bak
+*.backup
+*~
