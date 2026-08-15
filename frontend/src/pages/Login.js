@@ -16,7 +16,6 @@ export default function Login() {
  const [username, setUsername] = useState("");
  const [password, setPassword] = useState("");
  const [isLoggedIn, setIsLoggedIn] = useState(false);
- const [attendanceOnly, setAttendanceOnly] = useState(false);
  const [displayName, setDisplayName] = useState("User");
  const [loading, setLoading] = useState(false);
  const [showPassword, setShowPassword] = useState(false);
@@ -75,9 +74,7 @@ export default function Login() {
    const displayName = r.data.empName || r.data.empname || r.data.username || username || "User";
    setDisplayName(displayName);
    const userType = r.data.userType || r.data.usertype || "employee";
-   const isAttendanceLogin = userType === "employee";
-   setAttendanceOnly(isAttendanceLogin);
-   if (isAttendanceLogin) {
+   if (userType === "employee") {
     localStorage.setItem("attendanceEmpCode", requestUsername);
     localStorage.setItem("attendanceEmpName", displayName);
    } else {
@@ -110,12 +107,11 @@ export default function Login() {
   setUsername("");
   setPassword("");
   setShowPassword(false);
-  setAttendanceOnly(false);
   setIsLoggedIn(false);
  };
 
  if (isLoggedIn) {
-  return attendanceOnly ? <Attendance onLogout={logout} /> : <Dashboard username={displayName} userType={userType} onLogout={logout} />;
+  return <Dashboard username={displayName} userType={userType} onLogout={logout} />;
  }
 
  return (

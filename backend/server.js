@@ -347,6 +347,244 @@ async function ensureCompanyDocumentTable(){
  `);
 }
 
+async function ensureLeaveLogTable(){
+ const dbPool=await getPool();
+ await dbPool.request().query(`
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LeaveLog')
+  BEGIN
+   CREATE TABLE [dbo].[LeaveLog](
+    [LeaveLogID] [int] IDENTITY(1,1) NOT NULL,
+    [CompanyCode] [nvarchar](50) NULL,
+    [EmpCode] [nvarchar](50) NULL,
+    [FromDate] [datetime] NULL,
+    [ToDate] [datetime] NULL,
+    [Information] [nvarchar](50) NULL,
+    [Description] [nvarchar](500) NULL,
+    [isApproved] [bit] NOT NULL CONSTRAINT [DF__LeaveLog__isAppr__25077354] DEFAULT ((0)),
+    [IsCancel] [bit] NOT NULL CONSTRAINT [DF_LeaveLog_IsCancel] DEFAULT ((0)),
+    CONSTRAINT [PK_LeaveLog] PRIMARY KEY CLUSTERED ([LeaveLogID] ASC)
+   ) ON [PRIMARY];
+   CREATE INDEX idx_leave_log_empcode ON [dbo].[LeaveLog] ([EmpCode]);
+   CREATE INDEX idx_leave_log_company ON [dbo].[LeaveLog] ([CompanyCode]);
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'CompanyCode') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [CompanyCode] NVARCHAR(50) NULL;
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'EmpCode') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [EmpCode] NVARCHAR(50) NULL;
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'FromDate') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [FromDate] DATETIME NULL;
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'ToDate') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [ToDate] DATETIME NULL;
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'Information') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [Information] NVARCHAR(50) NULL;
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'Description') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [Description] NVARCHAR(500) NULL;
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'isApproved') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [isApproved] BIT NOT NULL CONSTRAINT [DF__LeaveLog__isAppr__25077354] DEFAULT ((0));
+  END
+  IF COL_LENGTH('dbo.LeaveLog', 'IsCancel') IS NULL
+  BEGIN
+   ALTER TABLE [dbo].[LeaveLog] ADD [IsCancel] BIT NOT NULL CONSTRAINT [DF_LeaveLog_IsCancel] DEFAULT ((0));
+  END
+ `);
+}
+
+async function ensureInterviewTables(){
+ const dbPool=await getPool();
+ await dbPool.request().query(`
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewEntry')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewEntry](
+    [InterviewID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewCode] [nvarchar](50) NOT NULL,
+    [CompanyCode] [nvarchar](50) NULL,
+    [InterviewDate] [datetime] NULL,
+    [CandidateName] [nvarchar](50) NULL,
+    [Gender] [nvarchar](50) NULL,
+    [Age] [int] NULL,
+    [MaritialStatus] [nvarchar](50) NULL,
+    [ContactNumber] [nvarchar](50) NULL,
+    [ContactNumber1] [nvarchar](50) NULL,
+    [EmailID] [nvarchar](50) NULL,
+    [Address] [nvarchar](max) NULL,
+    [PermanentLocation] [nvarchar](250) NULL,
+    [PresentLocation] [nvarchar](250) NULL,
+    [HighestQualification] [nvarchar](50) NULL,
+    [PreviousDesignation] [nvarchar](250) NULL,
+    [PostingApplyingFor] [nvarchar](250) NULL,
+    [Category] [nvarchar](50) NULL,
+    [RefferedBy] [nvarchar](150) NULL,
+    [ReasontoReleave] [nvarchar](max) NULL,
+    [Remarks] [nvarchar](max) NULL,
+    [TotalExperience] [decimal](18, 2) NULL,
+    [CurrentCTC] [decimal](18, 0) NULL,
+    [ExpectedCTC] [decimal](18, 2) NULL,
+    [ExpectedCTCNegotiable] [bit] NULL,
+    [NoticePeriod] [decimal](18, 2) NULL,
+    [NoticePeriodNegotiable] [bit] NULL,
+    [ExpectedJoiningDate] [datetime] NULL,
+    CONSTRAINT [PK_InterviewEntry] PRIMARY KEY CLUSTERED ([InterviewID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewTimeEntry')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewTimeEntry](
+    [InterviewTimeID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewID] [int] NULL,
+    [InterviewDateTime] [datetime] NULL,
+    [notes] [nvarchar](max) NULL,
+    CONSTRAINT [PK_InterviewTimeEntry] PRIMARY KEY CLUSTERED ([InterviewTimeID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewSkillEntry')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewSkillEntry](
+    [SkillID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewID] [int] NULL,
+    [SkillName] [nvarchar](150) NULL,
+    [Experience] [decimal](18, 2) NULL,
+    CONSTRAINT [PK_InterviewSkillEntry] PRIMARY KEY CLUSTERED ([SkillID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewRelationEntry')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewRelationEntry](
+    [RelationID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewID] [int] NULL,
+    [RelationName] [nvarchar](150) NULL,
+    [Relationship] [nvarchar](150) NULL,
+    [Age] [int] NULL,
+    CONSTRAINT [PK_InterviewRelationEntry] PRIMARY KEY CLUSTERED ([RelationID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewTimeEntryLevel')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewTimeEntryLevel](
+    [InterviewTimeEntryLevelID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewID] [int] NULL,
+    [ConductedBy] [nvarchar](max) NULL,
+    [NotesConductedBy] [nvarchar](max) NULL,
+    [NotesCandiadate] [nvarchar](max) NULL,
+    [RoundStatus] [int] NULL,
+    [RoundScore] [int] NULL,
+    [MoveToNextRound] [bit] NULL,
+    CONSTRAINT [PK_InterviewFinalEntry] PRIMARY KEY CLUSTERED ([InterviewTimeEntryLevelID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewFinalEntry')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewFinalEntry](
+    [InterviewFinalID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewID] [int] NULL,
+    [IDProof] [nvarchar](50) NULL,
+    [IDProofNumber] [nvarchar](50) NULL,
+    [FinalRoundStatus] [int] NULL,
+    [FinalRoundScore] [int] NULL,
+    [InterviewStatus] [int] NULL,
+    [Notes] [nvarchar](max) NULL,
+    [JoiningDate] [datetime] NULL,
+    [FixedCTC] [int] NULL,
+    CONSTRAINT [PK_InterviewFinalEntry] PRIMARY KEY CLUSTERED ([InterviewFinalID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewExperienceEntry')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewExperienceEntry](
+    [ExperienceID] [int] IDENTITY(1,1) NOT NULL,
+    [InterViewID] [int] NULL,
+    [CompanyName] [nvarchar](250) NULL,
+    [Experience] [decimal](18, 2) NULL,
+    [Salary] [decimal](18, 2) NULL,
+    CONSTRAINT [PK_InterviewExperienceEntry] PRIMARY KEY CLUSTERED ([ExperienceID] ASC)
+   ) ON [PRIMARY];
+  END
+
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewAddress')
+  BEGIN
+   CREATE TABLE [dbo].[InterviewAddress](
+    [InterviewAddressID] [int] IDENTITY(1,1) NOT NULL,
+    [InterviewID] [int] NOT NULL,
+    [ContactPersonName] [nvarchar](150) NULL,
+    [Careof] [nvarchar](50) NULL,
+    [CareOfName] [nvarchar](150) NULL,
+    [DoorNo] [nvarchar](150) NULL,
+    [Address1] [nvarchar](500) NULL,
+    [Address2] [nvarchar](500) NULL,
+    [AddressType] [nvarchar](50) NULL,
+    [LandMark] [nvarchar](500) NULL,
+    [CurrentLocation] [nvarchar](500) NULL,
+    [PermanentLocation] [nvarchar](500) NULL,
+    [CurrentAddress] [nvarchar](max) NULL,
+    [Village] [nvarchar](50) NULL,
+    [Town] [nvarchar](50) NULL,
+    [District] [nvarchar](50) NULL,
+    [State] [nvarchar](50) NULL,
+    [Country] [nvarchar](50) NULL,
+    [PinCode] [nvarchar](50) NULL,
+    [ContactNo] [nvarchar](50) NULL,
+    [Remarks] [nvarchar](500) NULL,
+    CONSTRAINT [PK__Intervie__687C1EE805C3D225] PRIMARY KEY CLUSTERED ([InterviewAddressID] ASC)
+   ) ON [PRIMARY];
+  END
+ `);
+}
+
+async function ensureVisitorTables(){
+ const dbPool=await getPool();
+ await dbPool.request().query(`
+  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'VisitorEntry')
+  BEGIN
+   CREATE TABLE [dbo].[VisitorEntry](
+    [VisitorID] [int] IDENTITY(1,1) NOT NULL,
+    [VisitorCode] [nvarchar](50) NULL,
+    [VisitDate] [datetime] NULL,
+    [VisitorName] [nvarchar](150) NULL,
+    [VisitorCompanyName] [nvarchar](150) NULL,
+    [ContactNumber] [nvarchar](50) NULL,
+    [Empcode] [nvarchar](50) NULL,
+    [EmpName] [nvarchar](150) NULL,
+    [Department] [nvarchar](50) NULL,
+    [Purpose] [bit] NULL,
+    [PurposeRegarding] [nvarchar](max) NULL,
+    [AppointmentType] [bit] NULL,
+    [AppointmentDate] [datetime] NULL,
+    [VechileNumber] [nvarchar](50) NULL,
+    [EmailID] [nvarchar](50) NULL,
+    [ConformationRequired] [bit] NULL,
+    [CoVisitor1] [nvarchar](50) NULL,
+    [CoVisitor2] [nvarchar](50) NULL,
+    [IdProof] [nvarchar](50) NULL,
+    [IDProofNumber] [nvarchar](150) NULL,
+    [MaterialsCarrying] [nvarchar](50) NULL,
+    [IsReturnableMaterial] [bit] NULL,
+    [ReturnableMaterialDescription] [nvarchar](max) NULL,
+    CONSTRAINT [PK_VisitorEntry] PRIMARY KEY CLUSTERED ([VisitorID] ASC)
+   ) ON [PRIMARY];
+   CREATE INDEX idx_visitor_empcode ON [dbo].[VisitorEntry] ([Empcode]);
+   CREATE INDEX idx_visitor_date ON [dbo].[VisitorEntry] ([VisitDate]);
+  END
+ `);
+}
+
 async function ensureCompanyDocumentPathTable(){
  const dbPool=await getPool();
  await dbPool.request().query(`
@@ -403,6 +641,34 @@ async function countEmployeeStatus(tableName, statusColumn, statusValue) {
  return Number(result.recordset?.[0]?.status_count || 0);
 }
 
+async function countActiveEmployees() {
+ const dbPool = await getPool();
+ const candidateTables = ["Employee", "employee"];
+ const candidateColumns = ["EmpStatus", "empstatus", "empstaus", "Status", "status"];
+
+ for (const tableName of candidateTables) {
+  for (const columnName of candidateColumns) {
+   try {
+    const result = await dbPool.request()
+     .query(`SELECT COUNT(*) AS total_employees FROM [dbo].[${tableName}] WHERE [${columnName}] = 1`);
+    const count = Number(result.recordset?.[0]?.total_employees || 0);
+    if (count > 0 || (tableName === candidateTables[candidateTables.length - 1] && columnName === candidateColumns[candidateColumns.length - 1])) {
+     return count;
+    }
+   } catch (error) {
+    // column or table may not exist in this schema; continue trying the next candidate.
+   }
+  }
+ }
+
+ try {
+  const fallbackResult = await dbPool.request().query(`SELECT COUNT(*) AS total_employees FROM [dbo].[Employee]`);
+  return Number(fallbackResult.recordset?.[0]?.total_employees || 0);
+ } catch (error) {
+  return 0;
+ }
+}
+
 async function getDashboardSummary(){
  const dbPool=await getPool();
  const now = new Date();
@@ -425,12 +691,15 @@ async function getDashboardSummary(){
     FROM [dbo].[AttendanceGeofence]
     WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate AND LEN(ISNULL([empcode], '')) > 0`);
 
+ const leaveCountResult = await dbPool.request().query(`SELECT COUNT(*) AS leave_count FROM [dbo].[LeaveLog]`);
+
+ const totalEmployees = await countActiveEmployees();
+
  const summaryResult = await dbPool.request()
   .input("operation", sql.NVarChar(50), "get_dashboard_summary")
   .execute("sp_webapi");
 
  const summaryRow = summaryResult.recordset?.[0] || {};
- const totalEmployees = Number(summaryRow.total_employees ?? summaryRow.totalEmployees ?? 0);
  const leftEmployees = Number(summaryRow.left_employees ?? summaryRow.leftEmployees ?? 0);
  const candidateCount = Number(summaryRow.candidate_count ?? summaryRow.candidateCount ?? summaryRow.documents_verified ?? summaryRow.documentsVerified ?? totalEmployees);
  const joinedEmployees = Number(summaryRow.joined_employees ?? summaryRow.joinedEmployees ?? totalEmployees);
@@ -445,8 +714,9 @@ async function getDashboardSummary(){
   leftEmployees,
   joinsToday,
   leftsToday,
-  candidateCount,
-  documentsVerified: candidateCount,
+  leaveCount: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
+  candidateCount: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
+  documentsVerified: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
  };
 }
 
@@ -653,6 +923,296 @@ app.get("/companies",async(req,res)=>{
  }catch(err){
   console.error(err);
   res.status(500).json({message:"Database error",error:err.message});
+ }
+});
+
+app.get("/interviews", async (req, res) => {
+ try {
+  await ensureInterviewTables();
+  const dbPool = await getPool();
+  const result = await dbPool.request().query(`SELECT TOP 20 * FROM [dbo].[InterviewEntry] ORDER BY [InterviewID] DESC`);
+  return res.json(result.recordset || []);
+ } catch (err) {
+  console.error("Interview fetch failed:", err);
+  return res.status(500).json({ message: "Failed to load interviews", error: err.message });
+ }
+});
+
+app.get("/visitors", async (req, res) => {
+ try {
+  await ensureVisitorTables();
+  const dbPool = await getPool();
+  const result = await dbPool.request().query(`SELECT TOP 50 * FROM [dbo].[VisitorEntry] ORDER BY [VisitorID] DESC`);
+  return res.json(result.recordset || []);
+ } catch (err) {
+  console.error("Visitor fetch failed:", err);
+  return res.status(500).json({ message: "Failed to load visitors", error: err.message });
+ }
+});
+
+app.post("/visitors", async (req, res) => {
+ try {
+  await ensureVisitorTables();
+  const visitor = req.body || {};
+  
+  const visitorCode = String(visitor.VisitorCode || "").trim();
+  const visitorName = String(visitor.VisitorName || "").trim();
+  if (!visitorCode || !visitorName) {
+    return res.status(400).json({ message: "Visitor code and name are required." });
+  }
+
+  const dbPool = await getPool();
+  const result = await dbPool.request()
+   .input("VisitorCode", sql.NVarChar(50), visitorCode)
+   .input("VisitDate", sql.DateTime, visitor.VisitDate ? new Date(visitor.VisitDate) : null)
+   .input("VisitorName", sql.NVarChar(150), visitorName)
+   .input("VisitorCompanyName", sql.NVarChar(150), visitor.VisitorCompanyName || null)
+   .input("ContactNumber", sql.NVarChar(50), visitor.ContactNumber || null)
+   .input("Empcode", sql.NVarChar(50), visitor.Empcode || null)
+   .input("EmpName", sql.NVarChar(150), visitor.EmpName || null)
+   .input("Department", sql.NVarChar(50), visitor.Department || null)
+   .input("Purpose", sql.Bit, Boolean(visitor.Purpose))
+   .input("PurposeRegarding", sql.NVarChar(sql.MAX), visitor.PurposeRegarding || null)
+   .input("AppointmentType", sql.Bit, Boolean(visitor.AppointmentType))
+   .input("AppointmentDate", sql.DateTime, visitor.AppointmentDate ? new Date(visitor.AppointmentDate) : null)
+   .input("VechileNumber", sql.NVarChar(50), visitor.VechileNumber || null)
+   .input("EmailID", sql.NVarChar(50), visitor.EmailID || null)
+   .input("ConformationRequired", sql.Bit, Boolean(visitor.ConformationRequired))
+   .input("CoVisitor1", sql.NVarChar(50), visitor.CoVisitor1 || null)
+   .input("CoVisitor2", sql.NVarChar(50), visitor.CoVisitor2 || null)
+   .input("IdProof", sql.NVarChar(50), visitor.IdProof || null)
+   .input("IDProofNumber", sql.NVarChar(150), visitor.IDProofNumber || null)
+   .input("MaterialsCarrying", sql.NVarChar(50), visitor.MaterialsCarrying || null)
+   .input("IsReturnableMaterial", sql.Bit, Boolean(visitor.IsReturnableMaterial))
+   .input("ReturnableMaterialDescription", sql.NVarChar(sql.MAX), visitor.ReturnableMaterialDescription || null)
+   .query(`INSERT INTO [dbo].[VisitorEntry]
+    ([VisitorCode],[VisitDate],[VisitorName],[VisitorCompanyName],[ContactNumber],[Empcode],[EmpName],[Department],[Purpose],[PurposeRegarding],[AppointmentType],[AppointmentDate],[VechileNumber],[EmailID],[ConformationRequired],[CoVisitor1],[CoVisitor2],[IdProof],[IDProofNumber],[MaterialsCarrying],[IsReturnableMaterial],[ReturnableMaterialDescription])
+    OUTPUT INSERTED.[VisitorID]
+    VALUES (@VisitorCode,@VisitDate,@VisitorName,@VisitorCompanyName,@ContactNumber,@Empcode,@EmpName,@Department,@Purpose,@PurposeRegarding,@AppointmentType,@AppointmentDate,@VechileNumber,@EmailID,@ConformationRequired,@CoVisitor1,@CoVisitor2,@IdProof,@IDProofNumber,@MaterialsCarrying,@IsReturnableMaterial,@ReturnableMaterialDescription)`);
+  
+  return res.status(201).json({ message: "Visitor saved successfully", visitorId: result.recordset?.[0]?.VisitorID || null });
+ } catch (err) {
+  console.error("Visitor save failed:", err);
+  return res.status(500).json({ message: "Visitor could not be saved", error: err.message });
+ }
+});
+
+app.post("/interviews", async (req, res) => {
+ try {
+  await ensureInterviewTables();
+  const payload = req.body || {};
+  const interview = payload || {};
+  const skills = Array.isArray(interview.skills) ? interview.skills : [];
+  const relations = Array.isArray(interview.relations) ? interview.relations : [];
+  const timeSlots = Array.isArray(interview.timeSlots) ? interview.timeSlots : [];
+  const finalEntry = interview.finalEntry || {};
+
+  const interviewCode = String(interview.InterviewCode || "").trim();
+  const candidateName = String(interview.CandidateName || "").trim();
+  if (!interviewCode || !candidateName) {
+    return res.status(400).json({ message: "Interview code and candidate name are required." });
+  }
+
+  const dbPool = await getPool();
+  const transaction = new sql.Transaction(dbPool);
+  await transaction.begin();
+
+  try {
+   const insertInterview = await transaction.request()
+    .input("InterviewCode", sql.NVarChar(50), interviewCode)
+    .input("CompanyCode", sql.NVarChar(50), String(interview.CompanyCode || "01"))
+    .input("InterviewDate", sql.DateTime, interview.InterviewDate ? new Date(interview.InterviewDate) : null)
+    .input("CandidateName", sql.NVarChar(50), candidateName)
+    .input("Gender", sql.NVarChar(50), interview.Gender || null)
+    .input("Age", sql.Int, interview.Age ? Number(interview.Age) : null)
+    .input("MaritialStatus", sql.NVarChar(50), interview.MaritialStatus || null)
+    .input("ContactNumber", sql.NVarChar(50), interview.ContactNumber || null)
+    .input("ContactNumber1", sql.NVarChar(50), interview.ContactNumber1 || null)
+    .input("EmailID", sql.NVarChar(50), interview.EmailID || null)
+    .input("Address", sql.NVarChar(sql.MAX), interview.Address || null)
+    .input("PermanentLocation", sql.NVarChar(250), interview.PermanentLocation || null)
+    .input("PresentLocation", sql.NVarChar(250), interview.PresentLocation || null)
+    .input("HighestQualification", sql.NVarChar(50), interview.HighestQualification || null)
+    .input("PreviousDesignation", sql.NVarChar(250), interview.PreviousDesignation || null)
+    .input("PostingApplyingFor", sql.NVarChar(250), interview.PostingApplyingFor || null)
+    .input("Category", sql.NVarChar(50), interview.Category || null)
+    .input("RefferedBy", sql.NVarChar(150), interview.RefferedBy || null)
+    .input("ReasontoReleave", sql.NVarChar(sql.MAX), interview.ReasontoReleave || null)
+    .input("Remarks", sql.NVarChar(sql.MAX), interview.Remarks || null)
+    .input("TotalExperience", sql.Decimal(18, 2), interview.TotalExperience !== "" && interview.TotalExperience !== null && interview.TotalExperience !== undefined ? Number(interview.TotalExperience) : null)
+    .input("CurrentCTC", sql.Decimal(18, 0), interview.CurrentCTC !== "" && interview.CurrentCTC !== null && interview.CurrentCTC !== undefined ? Number(interview.CurrentCTC) : null)
+    .input("ExpectedCTC", sql.Decimal(18, 2), interview.ExpectedCTC !== "" && interview.ExpectedCTC !== null && interview.ExpectedCTC !== undefined ? Number(interview.ExpectedCTC) : null)
+    .input("ExpectedCTCNegotiable", sql.Bit, Boolean(interview.ExpectedCTCNegotiable))
+    .input("NoticePeriod", sql.Decimal(18, 2), interview.NoticePeriod !== "" && interview.NoticePeriod !== null && interview.NoticePeriod !== undefined ? Number(interview.NoticePeriod) : null)
+    .input("NoticePeriodNegotiable", sql.Bit, Boolean(interview.NoticePeriodNegotiable))
+    .input("ExpectedJoiningDate", sql.DateTime, interview.ExpectedJoiningDate ? new Date(interview.ExpectedJoiningDate) : null)
+    .query(`INSERT INTO [dbo].[InterviewEntry]
+      ([InterviewCode],[CompanyCode],[InterviewDate],[CandidateName],[Gender],[Age],[MaritialStatus],[ContactNumber],[ContactNumber1],[EmailID],[Address],[PermanentLocation],[PresentLocation],[HighestQualification],[PreviousDesignation],[PostingApplyingFor],[Category],[RefferedBy],[ReasontoReleave],[Remarks],[TotalExperience],[CurrentCTC],[ExpectedCTC],[ExpectedCTCNegotiable],[NoticePeriod],[NoticePeriodNegotiable],[ExpectedJoiningDate])
+      OUTPUT INSERTED.[InterviewID]
+      VALUES (@InterviewCode,@CompanyCode,@InterviewDate,@CandidateName,@Gender,@Age,@MaritialStatus,@ContactNumber,@ContactNumber1,@EmailID,@Address,@PermanentLocation,@PresentLocation,@HighestQualification,@PreviousDesignation,@PostingApplyingFor,@Category,@RefferedBy,@ReasontoReleave,@Remarks,@TotalExperience,@CurrentCTC,@ExpectedCTC,@ExpectedCTCNegotiable,@NoticePeriod,@NoticePeriodNegotiable,@ExpectedJoiningDate)`);
+
+   const interviewId = insertInterview.recordset?.[0]?.InterviewID;
+
+   if (interviewId) {
+    for (const skill of skills) {
+      if (!skill || (!skill.SkillName && skill.Experience === "" && skill.Experience === undefined && skill.Experience === null)) continue;
+      await transaction.request()
+       .input("InterviewID", sql.Int, Number(interviewId))
+       .input("SkillName", sql.NVarChar(150), skill.SkillName || null)
+       .input("Experience", sql.Decimal(18, 2), skill.Experience !== "" && skill.Experience !== null && skill.Experience !== undefined ? Number(skill.Experience) : null)
+       .query(`INSERT INTO [dbo].[InterviewSkillEntry] ([InterviewID],[SkillName],[Experience]) VALUES (@InterviewID,@SkillName,@Experience)`);
+    }
+
+    for (const relation of relations) {
+      if (!relation || (!relation.RelationName && !relation.Relationship && !relation.Age)) continue;
+      await transaction.request()
+       .input("InterviewID", sql.Int, Number(interviewId))
+       .input("RelationName", sql.NVarChar(150), relation.RelationName || null)
+       .input("Relationship", sql.NVarChar(150), relation.Relationship || null)
+       .input("Age", sql.Int, relation.Age !== "" && relation.Age !== null && relation.Age !== undefined ? Number(relation.Age) : null)
+       .query(`INSERT INTO [dbo].[InterviewRelationEntry] ([InterviewID],[RelationName],[Relationship],[Age]) VALUES (@InterviewID,@RelationName,@Relationship,@Age)`);
+    }
+
+    for (const slot of timeSlots) {
+      if (!slot || (!slot.InterviewDateTime && !slot.notes)) continue;
+      await transaction.request()
+       .input("InterviewID", sql.Int, Number(interviewId))
+       .input("InterviewDateTime", sql.DateTime, slot.InterviewDateTime ? new Date(slot.InterviewDateTime) : null)
+       .input("notes", sql.NVarChar(sql.MAX), slot.notes || null)
+       .query(`INSERT INTO [dbo].[InterviewTimeEntry] ([InterviewID],[InterviewDateTime],[notes]) VALUES (@InterviewID,@InterviewDateTime,@notes)`);
+    }
+
+    if (finalEntry && Object.keys(finalEntry).some((key) => String(finalEntry[key] ?? "") !== "")) {
+      await transaction.request()
+       .input("InterviewID", sql.Int, Number(interviewId))
+       .input("IDProof", sql.NVarChar(50), finalEntry.IDProof || null)
+       .input("IDProofNumber", sql.NVarChar(50), finalEntry.IDProofNumber || null)
+       .input("FinalRoundStatus", sql.Int, finalEntry.FinalRoundStatus !== "" && finalEntry.FinalRoundStatus !== null && finalEntry.FinalRoundStatus !== undefined ? Number(finalEntry.FinalRoundStatus) : null)
+       .input("FinalRoundScore", sql.Int, finalEntry.FinalRoundScore !== "" && finalEntry.FinalRoundScore !== null && finalEntry.FinalRoundScore !== undefined ? Number(finalEntry.FinalRoundScore) : null)
+       .input("InterviewStatus", sql.Int, finalEntry.InterviewStatus !== "" && finalEntry.InterviewStatus !== null && finalEntry.InterviewStatus !== undefined ? Number(finalEntry.InterviewStatus) : null)
+       .input("Notes", sql.NVarChar(sql.MAX), finalEntry.Notes || null)
+       .input("JoiningDate", sql.DateTime, finalEntry.JoiningDate ? new Date(finalEntry.JoiningDate) : null)
+       .input("FixedCTC", sql.Int, finalEntry.FixedCTC !== "" && finalEntry.FixedCTC !== null && finalEntry.FixedCTC !== undefined ? Number(finalEntry.FixedCTC) : null)
+       .query(`INSERT INTO [dbo].[InterviewFinalEntry] ([InterviewID],[IDProof],[IDProofNumber],[FinalRoundStatus],[FinalRoundScore],[InterviewStatus],[Notes],[JoiningDate],[FixedCTC]) VALUES (@InterviewID,@IDProof,@IDProofNumber,@FinalRoundStatus,@FinalRoundScore,@InterviewStatus,@Notes,@JoiningDate,@FixedCTC)`);
+    }
+   }
+
+   await transaction.commit();
+   return res.status(201).json({ message: "Interview saved successfully", interviewId: interviewId || null });
+  } catch (txError) {
+   await transaction.rollback();
+   throw txError;
+  }
+ } catch (err) {
+  console.error("Interview save failed:", err);
+  return res.status(500).json({ message: "Interview could not be saved", error: err.message });
+ }
+});
+
+app.get("/leave-entries", async (req, res) => {
+ try {
+  await ensureLeaveLogTable();
+  const dbPool = await getPool();
+  const empCode = String(req.query.empcode || "").trim();
+  const requestUser = req.user || {};
+  const isAdmin = String(requestUser.userType || "").toLowerCase() === "admin";
+
+  let query = `SELECT [LeaveLogID], [CompanyCode], [EmpCode], [FromDate], [ToDate], [Information], [Description], [isApproved], [IsCancel]
+    FROM [dbo].[LeaveLog]`;
+  const params = [];
+
+  if (!isAdmin && empCode) {
+    query += ` WHERE [EmpCode] = @empCode`;
+    params.push({ name: "empCode", type: sql.NVarChar(50), value: empCode });
+  }
+
+  if (isAdmin) {
+    query += ` ORDER BY [LeaveLogID] DESC`;
+  } else if (empCode) {
+    query += ` ORDER BY [FromDate] DESC`;
+  } else {
+    query += ` WHERE [EmpCode] = @empCode ORDER BY [FromDate] DESC`;
+    params.push({ name: "empCode", type: sql.NVarChar(50), value: req.user?.username || "" });
+  }
+
+  const request = dbPool.request();
+  for (const param of params) {
+    request.input(param.name, param.type, param.value);
+  }
+
+  const result = await request.query(query);
+  return res.json(result.recordset || []);
+ } catch (err) {
+  console.error("Leave entries fetch failed:", err);
+  return res.status(500).json({ message: "Failed to load leave entries", error: err.message });
+ }
+});
+
+app.post("/leave-entries", async (req, res) => {
+ try {
+  await ensureLeaveLogTable();
+  const { companyCode, empCode, fromDate, toDate, information, description } = req.body || {};
+  const normalizedCompanyCode = String(companyCode || "01").trim() || "01";
+  const normalizedEmpCode = String(empCode || req.user?.username || "").trim();
+  const normalizedInfo = String(information || "").trim();
+
+  if (!normalizedEmpCode || !fromDate || !toDate || !normalizedInfo) {
+    return res.status(400).json({ message: "Employee code, leave dates and information are required." });
+  }
+
+  const startDate = new Date(fromDate);
+  const endDate = new Date(toDate);
+  if (Number.isNaN(startDate.getTime()) || Number.isNaN(endDate.getTime())) {
+    return res.status(400).json({ message: "Please provide valid leave dates." });
+  }
+  if (startDate > endDate) {
+    return res.status(400).json({ message: "From date cannot be after To date." });
+  }
+
+  const dbPool = await getPool();
+  const result = await dbPool.request()
+   .input("companyCode", sql.NVarChar(50), normalizedCompanyCode)
+   .input("empCode", sql.NVarChar(50), normalizedEmpCode)
+   .input("fromDate", sql.DateTime, startDate)
+   .input("toDate", sql.DateTime, endDate)
+   .input("information", sql.NVarChar(50), normalizedInfo)
+   .input("description", sql.NVarChar(500), String(description || ""))
+   .query(`INSERT INTO [dbo].[LeaveLog] ([CompanyCode],[EmpCode],[FromDate],[ToDate],[Information],[Description],[isApproved],[IsCancel])
+    VALUES (@companyCode,@empCode,@fromDate,@toDate,@information,@description,0,0)`);
+
+  return res.status(201).json({
+    message: "Leave request added successfully",
+    leaveLogId: result && result.recordset && result.recordset[0] ? result.recordset[0].LeaveLogID : null,
+  });
+ } catch (err) {
+  console.error("Leave entry insert failed:", err);
+  return res.status(500).json({ message: "Leave entry could not be saved", error: err.message });
+ }
+});
+
+app.patch("/leave-entries/:leaveLogId/approve", async (req, res) => {
+ try {
+  await ensureLeaveLogTable();
+  const leaveLogId = Number(req.params.leaveLogId);
+  const { isApproved } = req.body || {};
+
+  if (!Number.isInteger(leaveLogId)) {
+    return res.status(400).json({ message: "Valid leave request id is required." });
+  }
+
+  const dbPool = await getPool();
+  await dbPool.request()
+   .input("leaveLogId", sql.Int, leaveLogId)
+   .input("isApproved", sql.Bit, Boolean(isApproved))
+   .query(`UPDATE [dbo].[LeaveLog]
+    SET [isApproved] = @isApproved,
+        [IsCancel] = CASE WHEN @isApproved = 0 THEN 1 ELSE 0 END
+    WHERE [LeaveLogID] = @leaveLogId`);
+
+  return res.json({ message: "Leave status updated successfully" });
+ } catch (err) {
+  console.error("Leave approval update failed:", err);
+  return res.status(500).json({ message: "Approval update failed", error: err.message });
  }
 });
 

@@ -21,10 +21,12 @@ import {
 import {
   AccountCircle,
   Business,
+  CheckCircle,
   Dashboard as DashboardIcon,
   FilePresent,
   Logout,
   LocationOn,
+  Person,
 } from "@mui/icons-material";
 import { PhotoCamera, Draw } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
@@ -34,11 +36,14 @@ import EmpImage from "./EmpImage";
 import EmpDocument from "./EmpDocument";
 import CompanyDocument from "./CompanyDocument";
 import EmployeeSignature from "./EmployeeSignature";
+import InterviewScreen from "./InterviewScreen";
+import VisitorScreen from "./VisitorScreen";
+import LeaveEntry from "./LeaveEntry";
 
 function DashboardOverview({ stats }) {
   const statCards = [
     { title: "Total Employees", value: String(stats.totalEmployees), subtitle: "Active staff" },
-    { title: "Candidate", value: String(stats.candidateCount ?? stats.documentsVerified ?? 0), subtitle: "Completion rate" },
+    { title: "Leave", value: String(stats.leaveCount ?? stats.candidateCount ?? stats.documentsVerified ?? 0), subtitle: "Requests" },
     { title: "Geofence Checkins", value: String(stats.geofenceCheckins), subtitle: "Today" },
     { title: "Field Visits", value: String(stats.fieldVisits), subtitle: "Today" },
   ];
@@ -96,8 +101,8 @@ function DashboardOverview({ stats }) {
                 <Typography variant="h6" fontWeight={800}>{stats.leftEmployees} employees</Typography>
               </Paper>
               <Paper variant="outlined" sx={{ p: 2, borderRadius: 3, bgcolor: "#f9fbff" }}>
-                <Typography variant="body2" color="text.secondary">Candidate</Typography>
-                <Typography variant="h6" fontWeight={800}>{stats.candidateCount ?? stats.documentsVerified ?? 0}</Typography>
+                <Typography variant="body2" color="text.secondary">Leave</Typography>
+                <Typography variant="h6" fontWeight={800}>{stats.leaveCount ?? stats.candidateCount ?? stats.documentsVerified ?? 0}</Typography>
               </Paper>
             </Stack>
           </CardContent>
@@ -111,9 +116,13 @@ export default function Dashboard({ username, userType = "admin", onLogout }) {
   const navItems = userType === "employee"
     ? [
         { label: "Geofence", icon: <LocationOn /> },
+        { label: "Leave Entry", icon: <FilePresent /> },
       ]
     : [
         { label: "Dashboard", icon: <DashboardIcon /> },
+        { label: "Leave Approval", icon: <CheckCircle /> },
+        { label: "Interview", icon: <Person /> },
+        { label: "Visitor", icon: <Person /> },
         { label: "Geofence", icon: <LocationOn /> },
         { label: "Emp Image", icon: <PhotoCamera /> },
         { label: "Signature", icon: <Draw /> },
@@ -124,6 +133,7 @@ export default function Dashboard({ username, userType = "admin", onLogout }) {
   const [companyName, setCompanyName] = useState("Company");
   const [dashboardStats, setDashboardStats] = useState({
     totalEmployees: 0,
+    leaveCount: 0,
     candidateCount: 0,
     documentsVerified: 0,
     geofenceCheckins: 0,
@@ -163,8 +173,9 @@ export default function Dashboard({ username, userType = "admin", onLogout }) {
       const data = await response.json();
       setDashboardStats({
         totalEmployees: Number(data?.totalEmployees || 0),
-        candidateCount: Number(data?.candidateCount ?? data?.documentsVerified ?? 0),
-        documentsVerified: Number(data?.candidateCount ?? data?.documentsVerified ?? 0),
+        leaveCount: Number(data?.leaveCount ?? data?.totalLeaves ?? data?.candidateCount ?? data?.documentsVerified ?? 0),
+        candidateCount: Number(data?.leaveCount ?? data?.totalLeaves ?? data?.candidateCount ?? data?.documentsVerified ?? 0),
+        documentsVerified: Number(data?.leaveCount ?? data?.totalLeaves ?? data?.candidateCount ?? data?.documentsVerified ?? 0),
         geofenceCheckins: Number(data?.geofenceCheckins || 0),
         fieldVisits: Number(data?.fieldVisits || 0),
         joinedEmployees: Number(data?.joinsToday || data?.joinedEmployees || 0),
@@ -184,6 +195,22 @@ export default function Dashboard({ username, userType = "admin", onLogout }) {
 
     if (activeSection === "Geofence") {
       return <Attendance />;
+    }
+
+    if (activeSection === "Leave Entry") {
+      return <LeaveEntry userType="employee" username={username} />;
+    }
+
+    if (activeSection === "Leave Approval") {
+      return <LeaveEntry userType="admin" username={username} />;
+    }
+
+    if (activeSection === "Interview") {
+      return <InterviewScreen />;
+    }
+
+    if (activeSection === "Visitor") {
+      return <VisitorScreen />;
     }
 
     if (activeSection === "Emp Image") {
