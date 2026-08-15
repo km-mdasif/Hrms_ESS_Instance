@@ -677,47 +677,93 @@ async function getDashboardSummary(){
  const endOfDay = new Date(now);
  endOfDay.setHours(23, 59, 59, 999);
 
- const geofenceCountResult = await dbPool.request()
-  .input("startDate", sql.DateTime, startOfDay)
-  .input("endDate", sql.DateTime, endOfDay)
-  .query(`SELECT COUNT(*) AS geofence_checkins
-    FROM [dbo].[AttendanceGeofence]
-    WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate`);
+ let interviewTodayCount = 0;
+ let visitorCount = 0;
 
- const fieldVisitResult = await dbPool.request()
-  .input("startDate", sql.DateTime, startOfDay)
-  .input("endDate", sql.DateTime, endOfDay)
-  .query(`SELECT COUNT(DISTINCT [empcode]) AS field_visits
-    FROM [dbo].[AttendanceGeofence]
-    WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate AND LEN(ISNULL([empcode], '')) > 0`);
+ try {
+  const geofenceCountResult = await dbPool.request()
+   .input("startDate", sql.DateTime, startOfDay)
+   .input("endDate", sql.DateTime, endOfDay)
+   .query(`SELECT COUNT(*) AS geofence_checkins
+     FROM [dbo].[AttendanceGeofence]
+     WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate`);
 
- const leaveCountResult = await dbPool.request().query(`SELECT COUNT(*) AS leave_count FROM [dbo].[LeaveLog]`);
+  const fieldVisitResult = await dbPool.request()
+   .input("startDate", sql.DateTime, startOfDay)
+   .input("endDate", sql.DateTime, endOfDay)
+   .query(`SELECT COUNT(DISTINCT [empcode]) AS field_visits
+     FROM [dbo].[AttendanceGeofence]
+     WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate AND LEN(ISNULL([empcode], '')) > 0`);
 
- const totalEmployees = await countActiveEmployees();
+  const leaveCountResult = await dbPool.request().query(`SELECT COUNT(*) AS leave_count FROM [dbo].[LeaveLog]`);
 
- const summaryResult = await dbPool.request()
-  .input("operation", sql.NVarChar(50), "get_dashboard_summary")
-  .execute("sp_webapi");
+  try {
+   const visitorCountResult = await dbPool.request().query(`SELECT COUNT(*) AS visitor_count FROM [dbo].[VisitorEntry]`);
+   visitorCount = Number(visitorCountResult.recordset?.[0]?.visitor_count || 0);
+  } catch (error) {
+   visitorCount = 0;
+  }
 
- const summaryRow = summaryResult.recordset?.[0] || {};
- const leftEmployees = Number(summaryRow.left_employees ?? summaryRow.leftEmployees ?? 0);
- const candidateCount = Number(summaryRow.candidate_count ?? summaryRow.candidateCount ?? summaryRow.documents_verified ?? summaryRow.documentsVerified ?? totalEmployees);
- const joinedEmployees = Number(summaryRow.joined_employees ?? summaryRow.joinedEmployees ?? totalEmployees);
- const joinsToday = Number(summaryRow.joins_today ?? summaryRow.joinsToday ?? 0);
- const leftsToday = Number(summaryRow.lefts_today ?? summaryRow.leftsToday ?? 0);
+  try {
+   const interviewTodayResult = await dbPool.request()
+    .input("startDate", sql.DateTime, startOfDay)
+    .input("endDate", sql.DateTime, endOfDay)
+    .query(`SELECT COUNT(*) AS interview_today_count FROM [dbo].[InterviewEntry] WHERE [InterviewDate] >= @startDate AND [InterviewDate] < @endDate`);
+   interviewTodayCount = Number(interviewTodayResult.recordset?.[0]?.interview_today_count || 0);
+  } catch (error) {
+   interviewTodayCount = 0;
+  }
 
- return {
-  geofenceCheckins: Number(geofenceCountResult.recordset?.[0]?.geofence_checkins || 0),
-  fieldVisits: Number(fieldVisitResult.recordset?.[0]?.field_visits || 0),
-  totalEmployees,
-  joinedEmployees,
-  leftEmployees,
-  joinsToday,
-  leftsToday,
-  leaveCount: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
-  candidateCount: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
-  documentsVerified: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
- };
+  const totalEmployees = await countActiveEmployees();
+
+  const summaryResult = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_dashboard_summary")
+   .execute("sp_webapi");
+
+  const summaryRow = summaryResult.recordset?.[0] || {};
+  const leftEmployees = Number(summaryRow.left_employees ?? summaryRow.leftEmployees ?? 0);
+  const candidateCount = Number(summaryRow.candidate_count ?? summaryRow.candidateCount ?? summaryRow.documents_verified ?? summaryRow.documentsVerified ?? totalEmployees);
+  const joinedEmployees = Number(summaryRow.joined_employees ?? summaryRow.joinedEmployees ?? totalEmployees);
+  const joinsToday = Number(summaryRow.joins_today ?? summaryRow.joinsToday ?? 0);
+  const leftsToday = Number(summaryRow.lefts_today ?? summaryRow.leftsToday ?? 0);
+
+  return {
+   geofenceCheckins: Number(geofenceCountResult.recordset?.[0]?.geofence_checkins || 0),
+   fieldVisits: Number(fieldVisitResult.recordset?.[0]?.field_visits || 0),
+   totalEmployees,
+   joinedEmployees,
+   leftEmployees,
+   joinsToday,
+   leftsToday,
+   leaveCount: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
+   candidateCount,
+   documentsVerified: Number(summaryRow.documents_verified ?? summaryRow.documentsVerified ?? leaveCountResult.recordset?.[0]?.leave_count || 0),
+   interviewTodayCount,
+   employeeLiveCount: totalEmployees,
+   geofenceDetailsCount: Number(geofenceCountResult.recordset?.[0]?.geofence_checkins || 0),
+   fieldCount: Number(fieldVisitResult.recordset?.[0]?.field_visits || 0),
+   visitorCount,
+  };
+ } catch (error) {
+  console.error("getDashboardSummary failed:", error);
+  return {
+   geofenceCheckins: 0,
+   fieldVisits: 0,
+   totalEmployees: 0,
+   joinedEmployees: 0,
+   leftEmployees: 0,
+   joinsToday: 0,
+   leftsToday: 0,
+   leaveCount: 0,
+   candidateCount: 0,
+   documentsVerified: 0,
+   interviewTodayCount: 0,
+   employeeLiveCount: 0,
+   geofenceDetailsCount: 0,
+   fieldCount: 0,
+   visitorCount: 0,
+  };
+ }
 }
 
 async function getEmployeeDetails(empcode){
