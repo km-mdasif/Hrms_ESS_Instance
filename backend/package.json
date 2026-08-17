@@ -1,7 +1,8 @@
 {
  "name": "backend",
  "scripts": {
-  "start": "node https-server.js"
+  "start": "node src/server.js",
+  "start:https": "node https-server.js"
  },
  "dependencies": {
   "cors": "^2.8.5",

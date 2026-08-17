@@ -2,7 +2,7 @@ const fs = require('fs');
 const path = require('path');
 const http = require('http');
 const https = require('https');
-const app = require('./server');
+const app = require('./src/server');
 
 const preferredHttpPort = Number(process.env.HTTP_PORT) || Number(process.env.PORT) || 5000;
 const preferredHttpsPort = Number(process.env.HTTPS_PORT) || 5443;

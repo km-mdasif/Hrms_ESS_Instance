@@ -6,18 +6,16 @@
 const express = require("express");
 const multer = require("multer");
 const path = require("path");
+const fs = require("fs");
 const SignatureService = require("../services/signatureService");
-const { getDocumentDirectory } = require("../utils/fileManager");
 const { AppError } = require("../middleware/errorMiddleware");
 
 const router = express.Router();
+const docDir = path.resolve(__dirname, "../../document-storage");
+fs.mkdirSync(docDir, { recursive: true });
 
-// Multer configuration
-let upload;
-
-(async () => {
-  const docDir = await getDocumentDirectory();
-  const storage = multer.diskStorage({
+const upload = multer({
+  storage: multer.diskStorage({
     destination: docDir,
     filename: (req, file, cb) => {
       const timestamp = Date.now();
@@ -25,12 +23,9 @@ let upload;
       const ext = path.extname(file.originalname);
       cb(null, `sig-${timestamp}-${random}${ext}`);
     }
-  });
-  upload = multer({
-    storage,
-    limits: { fileSize: 10 * 1024 * 1024 }
-  });
-})();
+  }),
+  limits: { fileSize: 10 * 1024 * 1024 }
+});
 
 /**
  * POST /emp-signatures/:empCode/upload
