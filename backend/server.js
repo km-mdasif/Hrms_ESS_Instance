@@ -737,7 +737,7 @@ async function getDashboardSummary(){
    leftsToday,
    leaveCount: Number(leaveCountResult.recordset?.[0]?.leave_count || 0),
    candidateCount,
-   documentsVerified: Number(summaryRow.documents_verified ?? summaryRow.documentsVerified ?? leaveCountResult.recordset?.[0]?.leave_count || 0),
+   documentsVerified: Number(summaryRow.documents_verified ?? summaryRow.documentsVerified ?? leaveCountResult.recordset?.[0]?.leave_count ?? 0),
    interviewTodayCount,
    employeeLiveCount: totalEmployees,
    geofenceDetailsCount: Number(geofenceCountResult.recordset?.[0]?.geofence_checkins || 0),

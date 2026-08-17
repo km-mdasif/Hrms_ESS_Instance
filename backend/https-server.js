@@ -4,8 +4,8 @@ const http = require('http');
 const https = require('https');
 const app = require('./server');
 
-const httpPort = Number(process.env.HTTP_PORT) || Number(process.env.PORT) || 5000;
-const httpsPort = Number(process.env.HTTPS_PORT) || 5443;
+const preferredHttpPort = Number(process.env.HTTP_PORT) || Number(process.env.PORT) || 5000;
+const preferredHttpsPort = Number(process.env.HTTPS_PORT) || 5443;
 const certPath = process.env.HTTPS_CERT_PATH
   ? path.resolve(process.env.HTTPS_CERT_PATH)
   : path.resolve(__dirname, '../certs/localhost.crt');
@@ -23,12 +23,45 @@ const options = {
   cert: fs.readFileSync(certPath),
 };
 
-http.createServer(app).listen(httpPort, '0.0.0.0', () => {
-  console.log(`HTTP server running on http://localhost:${httpPort}`);
-  console.log(`Swagger UI available at http://localhost:${httpPort}/api-docs`);
+const tryListen = (server, port, protocol, onSuccess) => {
+  const attempt = (candidatePort) => {
+    server.removeAllListeners('error');
+    server.once('error', (error) => {
+      if (error.code === 'EACCES' || error.code === 'EADDRINUSE') {
+        const nextPort = fallbackPorts[protocol].find((value) => value !== candidatePort && value !== undefined);
+        if (nextPort) {
+          console.warn(`${protocol.toUpperCase()} port ${candidatePort} unavailable (${error.code}). Retrying on ${nextPort}...`);
+          attempt(nextPort);
+          return;
+        }
+
+        console.error(`${protocol.toUpperCase()} server could not bind to any configured port (${fallbackPorts[protocol].join(', ')}).`);
+        console.error('Set HTTPS_PORT to a valid port with enough permissions, or update the host firewall/port rules.');
+        process.exit(1);
+      }
+
+      throw error;
+    });
+
+    server.listen(candidatePort, '0.0.0.0', () => onSuccess(candidatePort));
+  };
+
+  attempt(port);
+};
+
+const fallbackPorts = {
+  http: [preferredHttpPort, 5000, 5001, 8080],
+  https: [preferredHttpsPort, 5443, 8443, 5001],
+};
+
+const httpServer = http.createServer(app);
+tryListen(httpServer, preferredHttpPort, 'http', (port) => {
+  console.log(`HTTP server running on http://localhost:${port}`);
+  console.log(`Swagger UI available at http://localhost:${port}/api-docs`);
 });
 
-https.createServer(options, app).listen(httpsPort, '0.0.0.0', () => {
-  console.log(`HTTPS server running on https://localhost:${httpsPort}`);
-  console.log(`Swagger UI available at https://localhost:${httpsPort}/api-docs`);
+const httpsServer = https.createServer(options, app);
+tryListen(httpsServer, preferredHttpsPort, 'https', (port) => {
+  console.log(`HTTPS server running on https://localhost:${port}`);
+  console.log(`Swagger UI available at https://localhost:${port}/api-docs`);
 });
