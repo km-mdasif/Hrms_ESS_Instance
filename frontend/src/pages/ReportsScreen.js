@@ -21,6 +21,8 @@ import {
   Person,
   Search,
   Visibility,
+  Map,
+  PhotoCamera,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
 
@@ -37,6 +39,13 @@ const formatDateValue = (value) => {
   const parsed = new Date(value);
   if (Number.isNaN(parsed.getTime())) return String(value);
   return parsed.toLocaleDateString();
+};
+
+const formatDateTimeValue = (value) => {
+  if (!value) return "-";
+  const parsed = new Date(value);
+  if (Number.isNaN(parsed.getTime())) return String(value);
+  return parsed.toLocaleString();
 };
 
 const toDateOnly = (value) => {
@@ -59,8 +68,24 @@ const matchesDateRange = (value, fromDate, toDate) => {
   return true;
 };
 
+const getFieldDate = (item) => item?.visitdatetime || item?.visitDateTime || item?.visitDate || item?.createdAt || item?.created_at || item?.date || "";
+
+const getGoogleMapUrl = (item) => {
+  const latitude = Number(item?.latitude);
+  const longitude = Number(item?.longitude);
+  if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
+  return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+};
+
+const getEmployeeImage = (item) => {
+  const image = item?.employeeselfie_base64 || item?.employeeSelfieBase64 || item?.employeeSelfie || "";
+  if (!image) return "";
+  return String(image).startsWith("data:") ? image : `data:image/jpeg;base64,${image}`;
+};
+
 export default function ReportsScreen({ type = "attendance" }) {
   const [records, setRecords] = useState([]);
+  const [employeeNames, setEmployeeNames] = useState({});
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   
@@ -89,6 +114,22 @@ export default function ReportsScreen({ type = "attendance" }) {
     const data = await response.json();
     const list = normalizeRows(data);
     setRecords(list);
+
+    const employeeCodes = [...new Set(list.map((item) => item?.empcode || item?.empCode).filter(Boolean))];
+    const nameEntries = await Promise.all(employeeCodes.map(async (code) => {
+      try {
+        const employeeResponse = await fetch(`${API_BASE_URL}/employees/${encodeURIComponent(code)}`, {
+          headers: { Authorization: `Bearer ${token}` },
+        });
+        if (!employeeResponse.ok) return [code, ""];
+        const employeePayload = await employeeResponse.json();
+        const employee = employeePayload?.data || employeePayload;
+        return [code, employee?.empname || employee?.EmpName || employee?.employeeName || employee?.name || ""];
+      } catch (error) {
+        return [code, ""];
+      }
+    }));
+    setEmployeeNames(Object.fromEntries(nameEntries));
   };
 
   const fetchFieldExecutive = async () => {
@@ -179,7 +220,7 @@ export default function ReportsScreen({ type = "attendance" }) {
         dateValue = item?.createdAt || item?.date || item?.created_at || item?.attendanceDate || item?.attendancedate || "";
       }
       if (type === "fieldExecutive") {
-        dateValue = item?.createdAt || item?.date || item?.visitDate || item?.visitDateTime || item?.checkinTime || item?.checkoutTime || "";
+        dateValue = getFieldDate(item);
       }
       if (type === "interview") {
         dateValue = item?.InterviewDate || item?.interviewDate || item?.CreatedAt || item?.createdAt || "";
@@ -198,23 +239,47 @@ export default function ReportsScreen({ type = "attendance" }) {
 
   const renderItem = (item, index) => {
     if (type === "attendance") {
+      const employeeCode = item?.empcode || item?.empCode || "-";
+      const selfie = item?.selfieimage_base64 || item?.selfieImageBase64 || item?.selfieBase64 || "";
+      const imageUrl = selfie ? (String(selfie).startsWith("data:") ? selfie : `data:image/jpeg;base64,${selfie}`) : "";
       return (
         <Box key={`${item?.id || item?.attendanceId || index}`} sx={{ p: 1.8, borderRadius: 2, border: "1px solid #e2e8f0", background: "#f8fafc" }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{item?.name || item?.geofenceName || item?.locationName || "Attendance Entry"}</Typography>
-          <Typography variant="body2" color="text.secondary">{item?.address || item?.location || item?.remarks || "No location details"}</Typography>
-          <Typography variant="caption" color="text.secondary" display="block">Lat: {item?.latitude ?? "-"} | Lng: {item?.longitude ?? "-"}</Typography>
-          <Typography variant="caption" color="text.secondary" display="block">Date: {formatDateValue(item?.createdAt || item?.date || item?.attendancedate || item?.created_at)}</Typography>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={2}>
+              {imageUrl ? <img src={imageUrl} alt={`Attendance ${employeeCode}`} style={{ width: "100%", height: 92, objectFit: "cover", borderRadius: 8 }} /> : <Box sx={{ height: 92, display: "flex", alignItems: "center", justifyContent: "center", background: "#e2e8f0", borderRadius: 2 }}><PhotoCamera color="disabled" /></Box>}
+            </Grid>
+            <Grid item xs={12} sm={10}>
+              <Typography variant="body2" fontWeight={700}>Employee Code: {employeeCode}</Typography>
+              <Typography variant="body2">Employee Name: {employeeNames[employeeCode] || item?.empname || item?.empName || "-"}</Typography>
+              <Typography variant="body2">Location: {item?.latitude ?? "-"}, {item?.longitude ?? "-"}</Typography>
+              {getGoogleMapUrl(item) && <Button href={getGoogleMapUrl(item)} target="_blank" rel="noreferrer" size="small" startIcon={<Map />} sx={{ mt: 0.5, pl: 0 }}>Google Location • 100 m radius</Button>}
+              <Typography variant="caption" color="text.secondary" display="block">Date & Time: {formatDateTimeValue(item?.createdAt || item?.date || item?.attendancedate || item?.created_at)}</Typography>
+            </Grid>
+          </Grid>
         </Box>
       );
     }
 
     if (type === "fieldExecutive") {
+      const imageUrl = getEmployeeImage(item);
+      const mapUrl = getGoogleMapUrl(item);
       return (
-        <Box key={`${item?.id || item?.fieldExecutiveId || index}`} sx={{ p: 1.8, borderRadius: 2, border: "1px solid #e2e8f0", background: "#f8fafc" }}>
-          <Typography variant="subtitle2" sx={{ fontWeight: 800 }}>{item?.employeeName || item?.employeeCode || item?.empName || "Employee"}</Typography>
-          <Typography variant="body2" color="text.secondary">{item?.natureOfWork || item?.workNature || "Nature of work not provided"}</Typography>
-          <Typography variant="caption" color="text.secondary" display="block">{item?.visitType === "checkout" ? "Check Out" : "Check In"} | {item?.clientName || "Client"} | {formatDateValue(item?.date || item?.visitDate || item?.createdAt)}</Typography>
-          <Typography variant="caption" color="text.secondary" display="block">Lat: {item?.latitude ?? "-"} | Lng: {item?.longitude ?? "-"}</Typography>
+        <Box key={`${item?.VisitID || item?.visitId || item?.id || index}`} sx={{ p: 1.8, borderRadius: 2, border: "1px solid #e2e8f0", background: "#f8fafc" }}>
+          <Grid container spacing={2} alignItems="center">
+            <Grid item xs={12} sm={2}>
+              {imageUrl ? <img src={imageUrl} alt="Employee visit" style={{ width: "100%", height: 92, objectFit: "cover", borderRadius: 8 }} /> : <Box sx={{ height: 92, display: "flex", alignItems: "center", justifyContent: "center", background: "#e2e8f0", borderRadius: 2 }}><PhotoCamera color="disabled" /></Box>}
+            </Grid>
+            <Grid item xs={12} sm={10}>
+              <Typography variant="caption" color="text.secondary" display="block">Date: {formatDateValue(getFieldDate(item))}</Typography>
+              <Typography variant="body2" fontWeight={700}>Employee Code: {item?.empcode || item?.empCode || item?.employeeCode || "-"}</Typography>
+              <Typography variant="body2">Employee Name: {item?.empname || item?.empName || item?.employeeName || "-"}</Typography>
+              <Typography variant="body2">Visit Type: {item?.visittype || item?.visitType || "-"}</Typography>
+              <Typography variant="body2">Client Name: {item?.clientname || item?.clientName || "-"}</Typography>
+              <Typography variant="body2">Remarks: {item?.remarks || "-"}</Typography>
+              <Typography variant="body2">Latitude: {item?.latitude ?? "-"}</Typography>
+              {mapUrl && <Button href={mapUrl} target="_blank" rel="noreferrer" size="small" startIcon={<Map />} sx={{ mt: 0.5, pl: 0 }}>Google Location • 100 m radius</Button>}
+            </Grid>
+          </Grid>
         </Box>
       );
     }

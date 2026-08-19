@@ -26,7 +26,6 @@ import {
   PhotoCamera,
   UploadFile,
   EventAvailable,
-  Map,
   AccountCircle,
   NoteAlt,
   Divider as DividerIcon,
@@ -493,7 +492,7 @@ export default function FieldExecutive({ username, userType = "employee" }) {
   };
 
   const formatFieldExecutiveTime = (record) => {
-    const rawValue = record?.visitDateTime || record?.createdAt || record?.created_at;
+    const rawValue = record?.visitDateTime || record?.visitdatetime || record?.createdAt || record?.created_at;
     if (!rawValue) return "Unknown time";
 
     const parsedDate = new Date(rawValue);

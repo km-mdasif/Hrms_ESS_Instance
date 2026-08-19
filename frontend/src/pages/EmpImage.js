@@ -13,6 +13,7 @@ import {
 } from "@mui/material";
 import { CloudUpload, PhotoCamera, SaveAlt } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
+import { getEmployeeName } from "../utils/employee";
 
 export default function EmpImage() {
   const [empCode, setEmpCode] = useState("");
@@ -159,7 +160,7 @@ export default function EmpImage() {
       // Employee found in employee table - enable camera and save options
       const data = await parseJsonResponse(employeeCheck);
       setEmployeeValidated(true);
-      setEmployeeName(data?.empname || data?.username || "");
+      setEmployeeName(getEmployeeName(data));
       clearImageState();
       setStatusMessage("Employee verified. Ready to capture or update image.");
     } catch (err) {

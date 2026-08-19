@@ -20,10 +20,10 @@ class AttendanceService {
         latitude: data?.latitude ?? null,
         longitude: data?.longitude ?? null,
         selfiimage: data?.selfieBuffer || (selfieBase64 ? Buffer.from(selfieBase64, "base64") : null),
-        selfieimage_base64: selfieBase64 || null,
+        selfie_image_base64: selfieBase64 || null,
         status: data?.status || "Present",
         remarks: data?.remarks || "",
-        geofenceradius: data?.geofenceRadius ?? null
+        geofence_radius: data?.geofenceRadius ?? null
       });
 
       return result.recordset?.[0] || { success: true };

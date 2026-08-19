@@ -23,6 +23,7 @@ import {
 } from "@mui/material";
 import { Add, CheckCircle, LogoutOutlined, Today } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
+import { getEmployeeName } from "../utils/employee";
 
 const initialForm = {
   visitorCode: "",
@@ -105,7 +106,7 @@ export default function VisitorEntry({ userType = "employee", username = "" }) {
       }
 
       const data = await response.json();
-      const empName = data?.empname || data?.username || data?.name || "";
+      const empName = getEmployeeName(data);
       setEmployeeValidated(true);
       setForm((prev) => ({ ...prev, empName: empName || prev.empName || "" }));
       setStatusMessage("Employee verified. Ready to check-in visitors.");

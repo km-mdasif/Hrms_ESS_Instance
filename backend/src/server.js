@@ -205,8 +205,9 @@ app.use(errorHandler);
 // Server Startup
 // ============================================
 
-const server = app.listen(PORT, HOST, () => {
-  console.log(`
+if (require.main === module) {
+  const server = app.listen(PORT, HOST, () => {
+    console.log(`
 ╔════════════════════════════════════════╗
 ║   Divine HRMS Backend Server Started   ║
 ║   ✓ Host: ${HOST}                        ║
@@ -214,24 +215,25 @@ const server = app.listen(PORT, HOST, () => {
 ║   ✓ Clean Architecture Enabled         ║
 ║   ✓ Database: MSSQL Connected          ║
 ╚════════════════════════════════════════╝
-  `);
-});
-
-// Graceful shutdown
-process.on("SIGTERM", async () => {
-  console.log("SIGTERM received, shutting down gracefully...");
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
+    `);
   });
-});
 
-process.on("SIGINT", async () => {
-  console.log("SIGINT received, shutting down gracefully...");
-  server.close(() => {
-    console.log("Server closed");
-    process.exit(0);
+  // Graceful shutdown
+  process.on("SIGTERM", async () => {
+    console.log("SIGTERM received, shutting down gracefully...");
+    server.close(() => {
+      console.log("Server closed");
+      process.exit(0);
+    });
   });
-});
+
+  process.on("SIGINT", async () => {
+    console.log("SIGINT received, shutting down gracefully...");
+    server.close(() => {
+      console.log("Server closed");
+      process.exit(0);
+    });
+  });
+}
 
 module.exports = app;

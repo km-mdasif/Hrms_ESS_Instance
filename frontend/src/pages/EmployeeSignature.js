@@ -16,6 +16,7 @@ import {
 } from "@mui/material";
 import { Clear, Create, SaveAlt } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
+import { getEmployeeName } from "../utils/employee";
 
 export default function EmployeeSignature() {
   const [empCode, setEmpCode] = useState("");
@@ -172,7 +173,7 @@ export default function EmployeeSignature() {
       }
 
       setEmployeeValidated(true);
-      setEmployeeName(result?.empname || result?.username || "");
+      setEmployeeName(getEmployeeName(result));
       setShowPad(true);
       setStatusMessage("Employee verified. You can open the signature pad and save the signature.");
       setPageMessage("");

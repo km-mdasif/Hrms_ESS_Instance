@@ -5,7 +5,7 @@
 
 const sql = require("mssql");
 
-const sqlServerInput = process.env.MSSQL_SERVER || process.env.DB_SERVER || "192.168.1.100";
+const sqlServerInput = process.env.MSSQL_SERVER || process.env.DB_SERVER || "divineserver";
 const sqlDatabase = process.env.MSSQL_DATABASE || process.env.DB_NAME || "hrms";
 const sqlUser = process.env.MSSQL_USER || process.env.DB_USER || "sa";
 const sqlPassword = process.env.MSSQL_PASSWORD || process.env.DB_PASSWORD || "sql@123";
@@ -77,6 +77,7 @@ async function getPool() {
   if (!pool) {
     pool = await sql.connect(dbConfig);
     console.log("✓ Database connection pool created");
+    console.log(`✓ Database target: ${sqlServer}${sqlInstance ? `\\${sqlInstance}` : ""}:${sqlPort}/${sqlDatabase}`);
   }
   return pool;
 }
@@ -98,10 +99,26 @@ async function closePool() {
 async function executeStoredProcedure(procedureName, inputParams = {}) {
   try {
     const dbPool = await getPool();
+    const parameterResult = await dbPool.request()
+      .input("procedureName", sql.NVarChar(128), procedureName)
+      .query(`
+        SELECT parameter_name = p.name
+        FROM sys.parameters p
+        INNER JOIN sys.procedures sp ON sp.object_id = p.object_id
+        INNER JOIN sys.schemas ss ON ss.schema_id = sp.schema_id
+        WHERE ss.name = N'dbo' AND sp.name = @procedureName
+      `);
+    const declaredParameters = new Set(
+      parameterResult.recordset.map(({ parameter_name }) => String(parameter_name).replace(/^@/, "").toLowerCase())
+    );
     let request = dbPool.request();
     
     // Add input parameters
     Object.entries(inputParams).forEach(([key, value]) => {
+      if (declaredParameters.size && !declaredParameters.has(String(key).toLowerCase())) {
+        console.warn(`[DB] Ignoring unsupported parameter @${key} for ${procedureName}`);
+        return;
+      }
       const sqlType = getSqlType(value);
       request = request.input(key, sqlType, value);
     });

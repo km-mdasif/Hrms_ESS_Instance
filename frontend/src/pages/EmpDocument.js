@@ -32,6 +32,7 @@ import {
   Upload as UploadIcon,
 } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
+import { getEmployeeName } from "../utils/employee";
 
 export default function EmpDocument() {
   const [searchEmpCode, setSearchEmpCode] = useState("");
@@ -124,7 +125,7 @@ export default function EmpDocument() {
         return;
       }
       const data = await response.json();
-      setEmployeeName(data?.empname || data?.username || "");
+      setEmployeeName(getEmployeeName(data));
     } catch (err) {
       console.error("Failed to fetch employee name:", err);
       setEmployeeName("");

@@ -2,8 +2,7 @@ const express = require("express");
 const multer = require("multer");
 const fs = require("fs");
 const path = require("path");
-const sql = require("mssql");
-const { getPool } = require("../database/db");
+const { executeStoredProcedure } = require("../database/db");
 
 const router = express.Router();
 
@@ -19,38 +18,7 @@ const upload = multer({
 
 // Ensure FieldExecutiveVisit table exists
 async function ensureFieldExecutiveTable() {
-  const dbPool = await getPool();
-  const query = `
-    IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'FieldExecutiveVisit')
-    BEGIN
-      CREATE TABLE [dbo].[FieldExecutiveVisit] (
-        [VisitID] INT PRIMARY KEY IDENTITY(1,1),
-        [companycode] NVARCHAR(50) NOT NULL,
-        [empcode] NVARCHAR(50) NOT NULL,
-        [empname] NVARCHAR(200),
-        [natureofwork] NVARCHAR(250) NOT NULL,
-        [visitdatetime] DATETIME NOT NULL DEFAULT GETDATE(),
-        [visittype] NVARCHAR(20) NOT NULL DEFAULT 'checkin',
-        [clientname] NVARCHAR(200) NOT NULL,
-        [latitude] DECIMAL(10,8),
-        [longitude] DECIMAL(11,8),
-        [accuracy] DECIMAL(10,2),
-        [remarks] NVARCHAR(MAX),
-        [employeeselfie] VARBINARY(MAX),
-        [employeeselfie_base64] NVARCHAR(MAX),
-        [clientselfie] VARBINARY(MAX),
-        [clientselfie_base64] NVARCHAR(MAX),
-        [documentname] NVARCHAR(200),
-        [documentextension] NVARCHAR(50),
-        [documentcontent] VARBINARY(MAX),
-        [createddate] DATETIME NOT NULL DEFAULT GETDATE()
-      );
-      CREATE INDEX idx_fieldexecutive_empcode ON [dbo].[FieldExecutiveVisit] ([empcode]);
-      CREATE INDEX idx_fieldexecutive_date ON [dbo].[FieldExecutiveVisit] ([visitdatetime]);
-      CREATE INDEX idx_fieldexecutive_company ON [dbo].[FieldExecutiveVisit] ([companycode]);
-    END
-  `;
-  await dbPool.request().query(query);
+  await executeStoredProcedure("sp_webapi", { operation: "ensure_field_executive_table" });
 }
 
 // POST: Save field executive onsite visit
@@ -125,46 +93,27 @@ router.post("/field-executive/onsite", upload.fields([
       : new Date(visitDateTime);
 
     await ensureFieldExecutiveTable();
-    const dbPool = await getPool();
-    const result = await dbPool
-      .request()
-      .input("companycode", sql.NVarChar(50), companyCode || "01")
-      .input("empcode", sql.NVarChar(50), employeeCode)
-      .input("empname", sql.NVarChar(200), employeeName || null)
-      .input("natureofwork", sql.NVarChar(250), natureOfWork)
-      .input("visitdatetime", sql.DateTime, visitDate)
-      .input("visittype", sql.NVarChar(20), visitType || "checkin")
-      .input("clientname", sql.NVarChar(200), clientName)
-      .input("latitude", sql.Decimal(10, 8), parseFloat(latitude))
-      .input("longitude", sql.Decimal(11, 8), parseFloat(longitude))
-      .input(
-        "accuracy",
-        sql.Decimal(10, 2),
-        accuracy !== undefined && accuracy !== null && accuracy !== ""
-          ? parseFloat(accuracy)
-          : null
-      )
-      .input("remarks", sql.NVarChar(sql.MAX), remarks || null)
-      .input("employeeselfie", sql.VarBinary(sql.MAX), employeeSelfieBuffer)
-      .input("employeeselfie_base64", sql.NVarChar(sql.MAX), employeeSelfieSource || null)
-      .input("clientselfie", sql.VarBinary(sql.MAX), clientSelfieBuffer)
-      .input("clientselfie_base64", sql.NVarChar(sql.MAX), clientSelfieSource || null)
-      .input("documentname", sql.NVarChar(200), documentName || null)
-      .input("documentextension", sql.NVarChar(50), documentExtension || null)
-      .input("documentcontent", sql.VarBinary(sql.MAX), documentBuffer)
-      .query(`
-        INSERT INTO [dbo].[FieldExecutiveVisit] (
-          [companycode], [empcode], [empname], [natureofwork], [visitdatetime], [visittype], [clientname], 
-          [latitude], [longitude], [accuracy], [remarks], [employeeselfie], [employeeselfie_base64], 
-          [clientselfie], [clientselfie_base64], [documentname], [documentextension], [documentcontent]
-        )
-        OUTPUT INSERTED.[VisitID]
-        VALUES (
-          @companycode, @empcode, @empname, @natureofwork, @visitdatetime, @visittype, @clientname,
-          @latitude, @longitude, @accuracy, @remarks, @employeeselfie, @employeeselfie_base64,
-          @clientselfie, @clientselfie_base64, @documentname, @documentextension, @documentcontent
-        )
-      `);
+    const result = await executeStoredProcedure("sp_webapi", {
+      operation: "insert_field_executive_visit",
+      companycode: companyCode || "01",
+      empcode: employeeCode,
+      empname: employeeName || null,
+      natureofwork: natureOfWork,
+      visitdatetime: visitDate,
+      visittype: visitType || "checkin",
+      clientname: clientName,
+      latitude: parseFloat(latitude),
+      longitude: parseFloat(longitude),
+      accuracy: accuracy !== undefined && accuracy !== null && accuracy !== "" ? parseFloat(accuracy) : null,
+      remarks: remarks || null,
+      employeeselfie: employeeSelfieBuffer,
+      employeeselfie_base64: employeeSelfieSource || null,
+      clientselfie: clientSelfieBuffer,
+      clientselfie_base64: clientSelfieSource || null,
+      documentname: documentName || null,
+      documentextension: documentExtension || null,
+      documentcontent: documentBuffer
+    });
 
     // Clean up uploaded files
     if (employeeSelfieFile && fs.existsSync(employeeSelfieFile.path))
@@ -194,15 +143,9 @@ router.post("/field-executive/onsite", upload.fields([
 // GET: List field executive visits
 router.get("/field-executive/list", async (req, res) => {
   try {
-    await ensureFieldExecutiveTable();
-    const dbPool = await getPool();
-    const result = await dbPool.request().query(`
-      SELECT TOP 100
-        [VisitID], [companycode], [empcode], [empname], [natureofwork], [visitdatetime], 
-        [visittype], [clientname], [latitude], [longitude], [accuracy], [remarks], [documentname]
-      FROM [dbo].[FieldExecutiveVisit]
-      ORDER BY [visitdatetime] DESC
-    `);
+    const result = await executeStoredProcedure("sp_webapi", {
+      operation: "get_field_executive_list"
+    });
     return res.json({ message: "Field executive visits retrieved.", records: result.recordset || [] });
   } catch (error) {
     console.error("Field executive list failed:", error);
@@ -220,22 +163,16 @@ router.get("/field-executive/employee/:empcode", async (req, res) => {
       return res.status(400).json({ error: "Employee code is required." });
     }
 
-    await ensureFieldExecutiveTable();
-    const dbPool = await getPool();
-    const result = await dbPool.request()
-      .input("empcode", sql.NVarChar(50), safeEmpCode)
-      .query(`
-        SELECT TOP 50
-          [VisitID], [companycode], [empcode], [empname], [natureofwork], [visitdatetime],
-          [visittype], [clientname], [latitude], [longitude], [accuracy], [remarks], [documentname]
-        FROM [dbo].[FieldExecutiveVisit]
-        WHERE [empcode] = @empcode
-        ORDER BY [visitdatetime] DESC
-      `);
+    const result = await executeStoredProcedure("sp_webapi", {
+      operation: "get_field_executive_list"
+    });
+    const records = (result.recordset || []).filter((record) =>
+      String(record?.empcode || record?.EmpCode || "").trim() === safeEmpCode
+    ).slice(0, 50);
 
     return res.json({
       message: "Employee field executive history retrieved.",
-      records: result.recordset || [],
+      records,
     });
   } catch (error) {
     console.error("Field executive employee history failed:", error);
@@ -249,31 +186,12 @@ router.get("/field-executive/report", async (req, res) => {
     const { fromDate, toDate, location } = req.query;
     const safeLocation = String(location || "").trim();
 
-    await ensureFieldExecutiveTable();
-    const dbPool = await getPool();
-    let query = `
-      SELECT [VisitID], [companycode], [empcode], [empname], [natureofwork], [visitdatetime],
-             [visittype], [clientname], [latitude], [longitude], [accuracy], [remarks], [documentname]
-      FROM [dbo].[FieldExecutiveVisit]
-      WHERE 1 = 1
-    `;
-    const request = dbPool.request();
-
-    if (fromDate) {
-      query += ` AND [visitdatetime] >= @fromDate`;
-      request.input("fromDate", sql.DateTime, new Date(fromDate));
-    }
-    if (toDate) {
-      query += ` AND [visitdatetime] <= @toDate`;
-      request.input("toDate", sql.DateTime, new Date(toDate));
-    }
-    if (safeLocation) {
-      query += ` AND ([clientname] LIKE @location OR [natureofwork] LIKE @location OR [empname] LIKE @location)`;
-      request.input("location", sql.NVarChar(200), `%${safeLocation}%`);
-    }
-    query += ` ORDER BY [visitdatetime] DESC`;
-
-    const result = await request.query(query);
+    const result = await executeStoredProcedure("sp_webapi", {
+      operation: "get_field_executive_report",
+      fromDate: fromDate ? new Date(fromDate) : null,
+      toDate: toDate ? new Date(toDate) : null,
+      location: safeLocation ? `%${safeLocation}%` : null
+    });
     return res.json({ message: "Field executive report retrieved.", records: result.recordset || [] });
   } catch (error) {
     console.error("Field executive report failed:", error);
