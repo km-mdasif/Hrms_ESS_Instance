@@ -7,6 +7,7 @@ export { default as apiClient } from "./api/apiClient";
 export { default as AttendanceService } from "./api/attendanceService";
 export { default as DocumentService } from "./api/documentService";
 export { default as EmpImageService } from "./api/empImageService";
+export { default as EmployeeService } from "./api/employeeService";
 export { default as EmployeeSignatureService } from "./api/employeeSignatureService";
 export { default as LeaveService } from "./api/leaveService";
 export { default as InterviewService } from "./api/interviewService";

@@ -12,20 +12,27 @@ import {
   CircularProgress,
   Alert,
   Grid,
+  Divider,
 } from "@mui/material";
 import { Logout } from "@mui/icons-material";
-import { PhotoCamera, LocationOn, SaveAlt, Refresh } from "@mui/icons-material";
+import { PhotoCamera, LocationOn, SaveAlt, Refresh, EventAvailable, UploadFile } from "@mui/icons-material";
 import { API_BASE_URL } from "../config";
 
 export default function Attendance({ onLogout }) {
   const [empCode, setEmpCode] = useState(() => {
     if (typeof window !== "undefined") {
+      if (String(localStorage.getItem("userType") || "").trim().toLowerCase() === "admin") {
+        return "";
+      }
       return localStorage.getItem("attendanceEmpCode") || "";
     }
     return "";
   });
   const [employeeName, setEmployeeName] = useState(() => {
     if (typeof window !== "undefined") {
+      if (String(localStorage.getItem("userType") || "").trim().toLowerCase() === "admin") {
+        return "";
+      }
       return localStorage.getItem("attendanceEmpName") || "";
     }
     return "";
@@ -51,7 +58,8 @@ export default function Attendance({ onLogout }) {
   const canvasRef = useRef(null);
 
   const normalizeEmpCode = (value) => String(value || "").trim();
-  const isEmployeeAttendanceLogin = Boolean(normalizeEmpCode(typeof window !== "undefined" ? localStorage.getItem("attendanceEmpCode") || "" : ""));
+  const isAdmin = typeof window !== "undefined" && String(localStorage.getItem("userType") || "").trim().toLowerCase() === "admin";
+  const isEmployeeAttendanceLogin = !isAdmin && Boolean(normalizeEmpCode(typeof window !== "undefined" ? localStorage.getItem("attendanceEmpCode") || "" : ""));
 
   const isMobileBrowser = () => {
     if (typeof window === "undefined") {
@@ -170,7 +178,7 @@ export default function Attendance({ onLogout }) {
     }
 
     try {
-      const response = await fetch(`${API_BASE_URL}/attendance-history/${encodeURIComponent(code)}`, {
+      const response = await fetch(`${API_BASE_URL}/attendance/history/${encodeURIComponent(code)}`, {
         headers: getAuthHeaders(),
       });
       if (!response.ok) {
@@ -179,7 +187,7 @@ export default function Attendance({ onLogout }) {
       }
 
       const data = await parseJsonResponse(response);
-      const records = Array.isArray(data?.records) ? data.records : [];
+      const records = Array.isArray(data?.data) ? data.data : Array.isArray(data?.records) ? data.records : [];
       const sortedRecords = [...records].sort((a, b) => {
         const timeA = parseAttendanceDateValue(a?.attendancedate || a?.servertime || a?.timestamp || a?.created_at || a?.createdAt || a?.datetime || a?.createdon || 0);
         const timeB = parseAttendanceDateValue(b?.attendancedate || b?.servertime || b?.timestamp || b?.created_at || b?.createdAt || b?.datetime || b?.createdon || 0);
@@ -206,8 +214,9 @@ export default function Attendance({ onLogout }) {
         }
         return;
       }
-      const data = await parseJsonResponse(response);
-      const newName = data?.empname || data?.username || employeeCode || "";
+      const responseData = await parseJsonResponse(response);
+      const data = responseData?.data || responseData;
+      const newName = data?.empname || data?.EmpName || data?.employeeName || data?.name || "";
       setEmployeeName(newName);
       if (typeof window !== "undefined") {
         if (newName) {
@@ -297,15 +306,16 @@ export default function Attendance({ onLogout }) {
         return;
       }
 
-      const response = await fetch(`${API_BASE_URL}/attendance-count/${encodeURIComponent(empCodeVal)}`, {
+      const response = await fetch(`${API_BASE_URL}/attendance/count/${encodeURIComponent(empCodeVal)}`, {
         headers: getAuthHeaders(),
       });
 
       if (response.ok) {
         const data = await parseJsonResponse(response);
-        setAttendanceCount(data?.attendance_count || 0);
-        if (data?.already_marked) {
-          setStatusMessage(`✅ Attendance marked ${data.attendance_count} time(s) today (Multiple entries allowed for field visits)`);
+        const count = Number(data?.data?.count ?? data?.attendance_count ?? 0);
+        setAttendanceCount(count);
+        if (count > 0) {
+          setStatusMessage(`✅ Attendance marked ${count} time(s) today (Multiple entries allowed for field visits)`);
         } else {
           setStatusMessage("Ready to mark first attendance of the day");
         }
@@ -442,20 +452,18 @@ export default function Attendance({ onLogout }) {
 
     setLoading(true);
     try {
-      const formData = new FormData();
-      formData.append("empcode", employeeCode);
-      formData.append("companycode", companyCode.trim());
-      formData.append("latitude", latitude.toString());
-      formData.append("longitude", longitude.toString());
-      formData.append("status", "Present");
-      formData.append("remarks", `Marked from location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`);
-      formData.append("accuracy", accuracy != null ? String(accuracy) : "");
-      formData.append("selfie", selectedFile);
-
-      const response = await fetch(`${API_BASE_URL}/attendance-geofence`, {
+      const response = await fetch(`${API_BASE_URL}/attendance`, {
         method: "POST",
-        body: formData,
-        headers: getAuthHeaders(),
+        headers: { ...getAuthHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({
+          empCode: employeeCode,
+          companyCode: companyCode.trim(),
+          latitude,
+          longitude,
+          status: "Present",
+          remarks: `Marked from location: ${latitude.toFixed(6)}, ${longitude.toFixed(6)}`,
+          selfieBase64: selectedPreview ? selectedPreview.split(",")[1] || "" : "",
+        }),
       });
 
       const result = await parseJsonResponse(response);
@@ -527,260 +535,154 @@ export default function Attendance({ onLogout }) {
 
   return (
     <Box sx={{ display: "grid", gap: 3 }}>
-      <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems="center" spacing={2}>
-        <Typography variant="h6" fontWeight={700}>
-           Divine HRMS Attendance
-        </Typography>
-        {onLogout ? (
-          <Button variant="outlined" color="secondary" startIcon={<Logout />} onClick={onLogout}>
-            Logout
-          </Button>
-        ) : null}
-      </Stack>
-
-      {/* Employee Code & Location Section */}
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography variant="h6" fontWeight={600}>
-              🎯 Mark Attendance with Geofence & Selfie
-            </Typography>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                {isEmployeeAttendanceLogin ? (
-                  <Paper
-                    sx={{
-                      p: 2,
-                      bgcolor: "#f8fafc",
-                      border: "1px solid #e2e8f0",
-                      borderRadius: 1.5,
-                    }}
-                  >
-                    <Typography variant="caption" color="text.secondary" sx={{ display: "block", mb: 0.5 }}>
-                      Employee Code
-                    </Typography>
-                    <Typography variant="body1" fontWeight={600}>
-                      {empCode || "Not available"}
-                    </Typography>
-                  </Paper>
-                ) : (
-                  <TextField
-                    fullWidth
-                    label="Employee Code"
-                    value={empCode}
-                    onChange={(e) => {
-                      setEmpCode(e.target.value);
-                      if (!e.target.value.trim()) {
-                        setEmployeeName("");
-                      }
-                    }}
-                    onBlur={() => {
-                      const code = normalizeEmpCode(empCode);
-                      if (code) fetchEmployeeName(code);
-                    }}
-                    placeholder="Enter employee code"
-                    size="small"
-                  />
-                )}
-              </Grid>
-              <Grid item xs={12} md={6}>
-                <TextField
-                  fullWidth
-                  label="Employee Name"
-                  value={employeeName}
-                  disabled
-                  placeholder="Employee name will appear here"
-                  size="small"
-                />
-              </Grid>
-              <Grid item xs={12}>
-                <Button
-                  variant="contained"
-                  onClick={checkAttendanceStatus}
-                  disabled={loading || !empCode.trim()}
-                  fullWidth
-                >
-                  Check Status
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 3 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+            <Box>
+              <Typography variant="h5" fontWeight={800}>Attendance Marking</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>
+                Geofence attendance with location, selfie, and activity tracking
+              </Typography>
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Chip label="Employee" sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }} />
+              {onLogout && (
+                <Button variant="outlined" color="inherit" startIcon={<Logout />} onClick={onLogout} sx={{ borderColor: "rgba(255,255,255,0.5)" }}>
+                  Logout
                 </Button>
-              </Grid>
+              )}
+            </Stack>
+          </Stack>
+        </Box>
+
+        <CardContent sx={{ p: 3 }}>
+          <Alert severity={messageSeverity} sx={{ mb: 3, borderRadius: 2 }}>
+            {statusMessage || "Mark attendance with location and selfie."}
+          </Alert>
+
+          <Grid container spacing={3}>
+            <Grid item xs={12} md={5}>
+              <Paper sx={{ p: 2.5, borderRadius: 3, border: "1px solid #e2e8f0", background: "#f8fffe", height: "100%" }}>
+                <Stack spacing={2.5}>
+                  <Box>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                      <PhotoCamera color="success" />
+                      <Typography variant="h6" fontWeight={800}>Selfie</Typography>
+                    </Stack>
+                    <Box sx={{ width: "100%", height: 220, bgcolor: "#000", borderRadius: 2, overflow: "hidden", display: "flex", alignItems: "center", justifyContent: "center" }}>
+                      {selectedPreview ? (
+                        <img src={selectedPreview} alt="Selfie preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+                      ) : cameraAvailable ? (
+                        <video ref={videoRef} autoPlay playsInline muted style={{ width: "100%", height: "100%", objectFit: "cover", transform: "scaleX(-1)" }} />
+                      ) : (
+                        <Box sx={{ color: "#cbd5e1", textAlign: "center", px: 2 }}>Camera unavailable</Box>
+                      )}
+                    </Box>
+                    <Stack spacing={1.5} sx={{ mt: 1.5 }}>
+                      {!selectedPreview ? (
+                        <>
+                          <Button variant="outlined" startIcon={<PhotoCamera />} onClick={openCamera} fullWidth>
+                            {cameraRequested ? "Camera Ready" : "Open Camera"}
+                          </Button>
+                          <Button variant="contained" color="success" startIcon={<PhotoCamera />} onClick={captureSelfie} fullWidth disabled={!cameraRequested || loading}>
+                            Capture Selfie
+                          </Button>
+                        </>
+                      ) : (
+                        <>
+                          <Typography variant="body2" color="success.main" sx={{ fontWeight: 600 }}>✅ Selfie captured</Typography>
+                          <Button variant="outlined" startIcon={<Refresh />} onClick={() => { setSelectedFile(null); setSelectedPreview(""); setCameraRequested(false); openCamera(); }} fullWidth>
+                            Retake Selfie
+                          </Button>
+                        </>
+                      )}
+                    </Stack>
+                  </Box>
+                </Stack>
+              </Paper>
             </Grid>
 
-            <Chip
-              label={statusMessage}
-              color={statusMessage.includes("✅") ? "success" : "primary"}
-              variant="outlined"
-            />
+            <Grid item xs={12} md={7}>
+              <Paper sx={{ p: 2.5, borderRadius: 3, border: "1px solid #e2e8f0", background: "#ffffff", height: "100%" }}>
+                <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2.5 }}>
+                  <EventAvailable color="success" />
+                  <Typography variant="h6" fontWeight={800}>Attendance</Typography>
+                </Stack>
 
-            {attendanceCount > 0 && (
-              <Alert severity="info">
-                ✅ You have marked attendance {attendanceCount} time(s) today. Multiple entries allowed for field work.
-              </Alert>
-            )}
+                <Stack spacing={2.2}>
+                  <Grid container spacing={2}>
+                    <Grid item xs={12} md={6}>
+                      {isEmployeeAttendanceLogin ? (
+                        <TextField fullWidth label="Employee Code" value={empCode} InputProps={{ readOnly: true }} size="small" />
+                      ) : (
+                        <TextField fullWidth label="Employee Code" value={empCode} onChange={(e) => { setEmpCode(e.target.value); if (!e.target.value.trim()) setEmployeeName(""); }} onBlur={() => { const code = normalizeEmpCode(empCode); if (code) fetchEmployeeName(code); }} placeholder="Enter employee code" size="small" />
+                      )}
+                    </Grid>
+                    <Grid item xs={12} md={6}>
+                      <TextField fullWidth label="Employee Name" value={employeeName} placeholder="Employee name" size="small" InputProps={{ readOnly: true }} />
+                    </Grid>
+                  </Grid>
 
-            <Button
-              variant="outlined"
-              startIcon={<LocationOn />}
-              onClick={fetchLocation}
-              disabled={loading}
-              fullWidth
-              sx={{ py: 1.5 }}
-            >
-              {loading ? <CircularProgress size={24} /> : "📍 Fetch My Location"}
-            </Button>
-
-            {latitude && longitude && (
-              <Paper
-                sx={{
-                  p: 2,
-                  bgcolor: "#f0f9ff",
-                  border: "1px solid #0ea5e9",
-                  borderRadius: 1.5,
-                }}
-              >
-                <Typography variant="body2" fontWeight={600} sx={{ mb: 1 }}>
-                  📍 Location Captured
-                </Typography>
-                <Typography variant="caption">
-                  Latitude: {latitude.toFixed(6)}
-                </Typography>
-                <br />
-                <Typography variant="caption">
-                  Longitude: {longitude.toFixed(6)}
-                </Typography>
-                <br />
-                <Typography variant="caption">
-                  Accuracy: {accuracy ? Math.round(accuracy) + "m" : "N/A"}
-                </Typography>
-              </Paper>
-            )}
-
-            {accuracy != null && (
-              <Paper
-                sx={{
-                  p: 2,
-                  bgcolor: "#f8fafc",
-                  border: "1px solid #cbd5e1",
-                  borderRadius: 1.5,
-                }}
-              >
-                <Typography variant="body2" fontWeight={600} sx={{ mb: 0.5 }}>
-                  📏 Accuracy Meter
-                </Typography>
-                <Typography variant="caption" color="text.secondary">
-                  Current location accuracy: {Math.round(accuracy)}m
-                </Typography>
-              </Paper>
-            )}
-
-          </Stack>
-        </CardContent>
-      </Card>
-
-      {/* Selfie Capture Section */}
-      <Card>
-        <CardContent>
-          <Stack spacing={2}>
-            <Typography variant="h6" fontWeight={600}>
-              📷 Capture Selfie
-            </Typography>
-
-            <Grid container spacing={2}>
-              <Grid item xs={12} md={6}>
-                <Box
-                  sx={{
-                    width: "100%",
-                    height: 300,
-                    bgcolor: "#000",
-                    borderRadius: 2,
-                    overflow: "hidden",
-                    display: "flex",
-                    alignItems: "center",
-                    justifyContent: "center",
-                  }}
-                >
-                  {selectedPreview ? (
-                    <img
-                      src={selectedPreview}
-                      alt="Selfie preview"
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                      }}
-                    />
-                  ) : cameraAvailable ? (
-                    <video
-                      ref={videoRef}
-                      autoPlay
-                      playsInline
-                      muted
-                      style={{
-                        width: "100%",
-                        height: "100%",
-                        objectFit: "cover",
-                        transform: "scaleX(-1)",
-                      }}
-                    />
-                  ) : (
-                    <Box sx={{ color: "#cbd5e1", textAlign: "center", px: 2 }}>
-                      Camera unavailable.
-                      <br />
-                      Please use a device with camera access.
-                    </Box>
-                  )}
-                </Box>
-              </Grid>
-
-              <Grid item xs={12} md={6}>
-                <Stack spacing={2} sx={{ height: "100%" }}>
-                  {!selectedPreview ? (
-                    <Stack spacing={1.5}>
-                      <Button
-                        variant="outlined"
-                        startIcon={<PhotoCamera />}
-                        onClick={openCamera}
-                        fullWidth
-                        sx={{ py: 1.75 }}
-                      >
-                        {cameraRequested ? "Camera Ready" : "📹 Open Camera"}
-                      </Button>
-                      <Button
-                        variant="contained"
-                        startIcon={<PhotoCamera />}
-                        onClick={captureSelfie}
-                        fullWidth
-                        disabled={!cameraRequested || loading}
-                        sx={{ py: 2 }}
-                      >
-                        📸 Capture Selfie
-                      </Button>
+                  <Box>
+                    <Stack direction="row" spacing={1.5} alignItems="center" sx={{ mb: 2 }}>
+                      <LocationOn color="success" />
+                      <Typography variant="h6" fontWeight={800}>Geofence</Typography>
                     </Stack>
-                  ) : (
-                    <>
-                      <Typography variant="body2" color="success.main">
-                        ✅ Selfie captured successfully
-                      </Typography>
-                      <Button
-                        variant="outlined"
-                        startIcon={<Refresh />}
-                        onClick={() => {
-                          setSelectedFile(null);
-                          setSelectedPreview("");
-                          setCameraRequested(false);
-                          openCamera();
-                        }}
-                        fullWidth
-                      >
-                        Retake Selfie
+                    <Stack spacing={2}>
+                      <Button variant="contained" color="success" startIcon={<LocationOn />} onClick={fetchLocation} disabled={loading} sx={{ borderRadius: 2, py: 1.4, fontWeight: 700 }}>
+                        {loading ? <CircularProgress size={20} /> : "Fetch My Location"}
                       </Button>
-                    </>
+                      {latitude && longitude && (
+                        <Box sx={{ border: "1px solid #bbf7d0", borderRadius: 2, background: "#ecfdf5", p: 2 }}>
+                          <Typography variant="body2" color="text.secondary">Latitude: {latitude.toFixed(6)}</Typography>
+                          <Typography variant="body2" color="text.secondary">Longitude: {longitude.toFixed(6)}</Typography>
+                          {accuracy != null && <Typography variant="body2" color="text.secondary">Accuracy: {Math.round(accuracy)}m</Typography>}
+                        </Box>
+                      )}
+                    </Stack>
+                  </Box>
+
+                  <Divider />
+
+                  <Button variant="contained" color="success" onClick={checkAttendanceStatus} disabled={loading || !empCode.trim()} fullWidth sx={{ py: 1.5, fontWeight: 700 }}>
+                    Check Status
+                  </Button>
+
+                  {attendanceCount > 0 && (
+                    <Alert severity="info" sx={{ borderRadius: 2 }}>
+                      ✅ You have marked attendance {attendanceCount} time(s) today. Multiple entries allowed for field work.
+                    </Alert>
                   )}
 
-                  {!secureContext && (
-                    <Alert severity="warning" sx={{ mt: 1 }}>
-                      Location and camera access work best over HTTPS or localhost. If you are testing on mobile, open the app with a secure URL.
-                    </Alert>
+                  <Divider />
+
+                  <Box>
+                    <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>Activity Information</Typography>
+                    <Stack spacing={1}>
+                      <Typography variant="body2" color="text.secondary">✓ Location: {latitude && longitude ? `${latitude.toFixed(6)}, ${longitude.toFixed(6)}` : "Pending"}</Typography>
+                      <Typography variant="body2" color="text.secondary">✓ Selfie: {selectedPreview ? "Captured" : "Pending"}</Typography>
+                      <Typography variant="body2" color="text.secondary">✓ Server Time: {new Date().toLocaleString()}</Typography>
+                      <Typography variant="body2" color="text.secondary">✓ Accuracy: {accuracy ? Math.round(accuracy) + "m" : "N/A"}</Typography>
+                    </Stack>
+                  </Box>
+
+                  {recentAttendance.length > 0 && (
+                    <>
+                      <Divider />
+                      <Box>
+                        <Typography variant="subtitle2" fontWeight={700} sx={{ mb: 1.5 }}>📋 Last 5 Entries</Typography>
+                        <Stack spacing={1}>
+                          {recentAttendance.map((record, index) => (
+                            <Box key={`${record?.attendanceid || record?.id || index}`} sx={{ borderTop: index > 0 ? "1px solid #e2e8f0" : "none", pt: index > 0 ? 1 : 0 }}>
+                              <Typography variant="body2" fontWeight={600}>
+                                {record?.latitude != null && record?.longitude != null ? `Location: ${Number(record.latitude).toFixed(4)}, ${Number(record.longitude).toFixed(4)}` : "Location tracked"}
+                              </Typography>
+                              <Typography variant="caption" color="text.secondary">Time: {formatAttendanceTime(record)}</Typography>
+                            </Box>
+                          ))}
+                        </Stack>
+                      </Box>
+                    </>
                   )}
 
                   <Button
@@ -790,70 +692,18 @@ export default function Attendance({ onLogout }) {
                     onClick={handleSaveAttendance}
                     disabled={loading || !selectedFile || !latitude || !longitude}
                     fullWidth
-                    sx={{ py: 2, fontWeight: 600 }}
+                    sx={{ py: 1.5, fontWeight: 700 }}
                   >
                     {loading ? "Saving..." : "✅ Mark Attendance"}
                   </Button>
-
-                  {attendanceMarked && (
-                    <Alert severity="success">
-                      Attendance marked successfully at {new Date().toLocaleTimeString()}
-                    </Alert>
-                  )}
                 </Stack>
-              </Grid>
+              </Paper>
             </Grid>
-          </Stack>
+          </Grid>
         </CardContent>
       </Card>
 
       <canvas ref={canvasRef} style={{ display: "none" }} />
-
-      {/* Info Section */}
-      <Card>
-        <CardContent>
-          <Stack spacing={1.5}>
-            <Typography variant="subtitle2" fontWeight={600}>
-              ℹ️ Attendance Information
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ✓ Location captured with GPS coordinates
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ✓ Selfie captured as image (no facial recognition)
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ✓ Multiple entries allowed per day for field visits
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ✓ Server time recorded: {new Date().toLocaleString()}
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              ✓ Track employee location and activity throughout the day
-            </Typography>
-
-            {recentAttendance.length > 0 && (
-              <Box sx={{ pt: 1 }}>
-                <Typography variant="subtitle2" fontWeight={600} sx={{ mb: 1 }}>
-                  🕒 Last 5 Attendance Operations
-                </Typography>
-                <Stack spacing={1}>
-                  {recentAttendance.map((record, index) => (
-                    <Box key={`${record?.attendanceid || record?.id || index}`} sx={{ borderTop: index > 0 ? "1px solid #e2e8f0" : "none", pt: index > 0 ? 1 : 0 }}>
-                      <Typography variant="body2" fontWeight={600}>
-                        {record?.latitude != null && record?.longitude != null ? `Location: ${Number(record.latitude).toFixed(4)}, ${Number(record.longitude).toFixed(4)}` : "Location captured"}
-                      </Typography>
-                      <Typography variant="caption" color="text.secondary">
-                        Date & Time: {formatAttendanceTime(record)}
-                      </Typography>
-                    </Box>
-                  ))}
-                </Stack>
-              </Box>
-            )}
-          </Stack>
-        </CardContent>
-      </Card>
     </Box>
   );
 }

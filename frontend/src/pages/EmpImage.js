@@ -159,7 +159,7 @@ export default function EmpImage() {
       // Employee found in employee table - enable camera and save options
       const data = await parseJsonResponse(employeeCheck);
       setEmployeeValidated(true);
-      setEmployeeName(data?.empname || data?.username || employeeCode);
+      setEmployeeName(data?.empname || data?.username || "");
       clearImageState();
       setStatusMessage("Employee verified. Ready to capture or update image.");
     } catch (err) {
@@ -347,8 +347,22 @@ export default function EmpImage() {
 
   return (
     <Box sx={{ display: "grid", gap: 3 }}>
-      <Card>
-        <CardContent>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 3 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+            <Box>
+              <Typography variant="h5" fontWeight={800}>Employee Image</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>Upload and manage employee profile images</Typography>
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Chip label="Photos" sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }} />
+            </Stack>
+          </Stack>
+        </Box>
+      </Card>
+
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <CardContent sx={{ p: 3 }}>
           <Stack spacing={2}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "flex-end" }}>
               <Box sx={{ display: "grid", gap: 2, width: "100%" }}>
@@ -382,9 +396,9 @@ export default function EmpImage() {
                 <TextField
                   label="Employee Name"
                   value={employeeName}
-                  disabled
                   size="small"
                   placeholder="Employee name will appear after search"
+                  InputProps={{ readOnly: true }}
                 />
               </Box>
               <Button variant="contained" onClick={fetchEmployeeImage} disabled={loading || !empCode.trim()}>

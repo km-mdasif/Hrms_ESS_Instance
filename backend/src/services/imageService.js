@@ -3,7 +3,7 @@
  * Handles employee profile images
  */
 
-const { executeQuery } = require("../database/db");
+const { executeStoredProcedure } = require("../database/db");
 const { AppError } = require("../middleware/errorMiddleware");
 const { deleteFile } = require("../utils/fileManager");
 const fs = require("fs");
@@ -14,36 +14,14 @@ class ImageService {
    */
   static async uploadEmployeeImage(empCode, file) {
     try {
-      const params = {
-        empCode: String(empCode).trim(),
-        filename: file.filename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        uploadedAt: new Date()
-      };
-
-      // Check if image already exists
-      const existing = await executeQuery(
-        `SELECT filename FROM EmpImage WHERE empCode = @empCode`,
-        { empCode: params.empCode }
-      );
-
-      if (existing.recordset && existing.recordset.length > 0) {
-        // Delete old image
-        deleteFile(existing.recordset[0].filename);
-        // Update existing
-        await executeQuery(
-          `UPDATE EmpImage SET filename = @filename, mimeType = @mimeType, uploadedAt = @uploadedAt WHERE empCode = @empCode`,
-          params
-        );
-      } else {
-        // Insert new
-        await executeQuery(
-          `INSERT INTO EmpImage (empCode, filename, originalName, mimeType, uploadedAt)
-           VALUES (@empCode, @filename, @originalName, @mimeType, @uploadedAt)`,
-          params
-        );
-      }
+      await executeStoredProcedure("sp_webapi", {
+        operation: "upsert_emp_image",
+        empcode: String(empCode || "").trim(),
+        companycode: "01",
+        empimage: file?.buffer || null,
+        imagename: file?.originalname || "employee-image",
+        description: "employee-image"
+      });
 
       return { success: true, filename: file.filename };
     } catch (error) {
@@ -58,10 +36,10 @@ class ImageService {
    */
   static async getEmployeeImage(empCode) {
     try {
-      const result = await executeQuery(
-        `SELECT filename FROM EmpImage WHERE empCode = @empCode`,
-        { empCode: String(empCode).trim() }
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_emp_image",
+        empcode: String(empCode || "").trim()
+      });
 
       return result.recordset?.[0] || null;
     } catch (error) {
@@ -77,10 +55,10 @@ class ImageService {
     try {
       deleteFile(filePath);
 
-      await executeQuery(
-        `DELETE FROM EmpImage WHERE empCode = @empCode`,
-        { empCode: String(empCode).trim() }
-      );
+      await executeStoredProcedure("sp_webapi", {
+        operation: "delete_emp_signature",
+        empcode: String(empCode || "").trim()
+      });
 
       return { success: true };
     } catch (error) {

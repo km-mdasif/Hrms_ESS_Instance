@@ -12,12 +12,18 @@ class AuthService {
    * @param {string} password - User password
    * @returns {Promise<Object>} Login response with token and user data
    */
-  static async login(username, password) {
+  static async login(username, password, companyCode) {
     try {
-      const response = await apiClient.post("/login", {
+      const requestBody = {
         username: String(username).trim(),
         password: String(password),
-      });
+      };
+
+      if (companyCode && String(companyCode).trim()) {
+        requestBody.companycode = String(companyCode).trim();
+      }
+
+      const response = await apiClient.post("/login", requestBody);
       return response.data;
     } catch (error) {
       throw this._handleError(error, "Login failed");
@@ -82,11 +88,26 @@ class AuthService {
    * Clear authentication data from storage
    */
   static clearStorageOnLogout() {
-    localStorage.removeItem("token");
-    localStorage.removeItem("refreshToken");
-    localStorage.removeItem("companyCode");
-    localStorage.removeItem("attendanceEmpCode");
-    localStorage.removeItem("attendanceEmpName");
+    const storageKeys = [
+      "token",
+      "refreshToken",
+      "companyCode",
+      "companyName",
+      "attendanceEmpCode",
+      "attendanceEmpName",
+      "username",
+      "userName",
+      "userType",
+      "userData",
+      "visitorDraft",
+      "fieldExecutiveDraft",
+      "lastLogin",
+      "authSession",
+    ];
+
+    storageKeys.forEach((key) => localStorage.removeItem(key));
+    sessionStorage.clear();
+
     delete window.COMPANY_CODE;
     delete window.COMPANY_NAME;
   }

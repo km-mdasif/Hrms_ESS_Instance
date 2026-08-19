@@ -172,7 +172,7 @@ export default function EmployeeSignature() {
       }
 
       setEmployeeValidated(true);
-      setEmployeeName(result?.empname || result?.username || employeeCode);
+      setEmployeeName(result?.empname || result?.username || "");
       setShowPad(true);
       setStatusMessage("Employee verified. You can open the signature pad and save the signature.");
       setPageMessage("");
@@ -353,8 +353,22 @@ export default function EmployeeSignature() {
 
   return (
     <Box sx={{ display: "grid", gap: 3 }}>
-      <Card>
-        <CardContent>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 3 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+            <Box>
+              <Typography variant="h5" fontWeight={800}>Employee Signature</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>Capture and manage employee digital signatures</Typography>
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Chip label="Signature" sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }} />
+            </Stack>
+          </Stack>
+        </Box>
+      </Card>
+
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <CardContent sx={{ p: 3 }}>
           <Stack spacing={2}>
             <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "flex-end" }}>
               <Box sx={{ display: "grid", gap: 2, width: "100%" }}>
@@ -385,9 +399,9 @@ export default function EmployeeSignature() {
                 <TextField
                   label="Employee Name"
                   value={employeeName}
-                  disabled
                   size="small"
                   placeholder="Employee name will appear after search"
+                  InputProps={{ readOnly: true }}
                 />
               </Box>
               <Button variant="contained" onClick={fetchEmployee} disabled={loading || !empCode.trim()}>

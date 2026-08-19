@@ -15,15 +15,19 @@ const router = express.Router();
  */
 router.post("/attendance", async (req, res, next) => {
   try {
-    const { empCode, latitude, longitude, accuracy, selfieFilename } = req.body;
+    const { empCode, companyCode, latitude, longitude, accuracy, status, remarks, selfieBase64, selfieFilename } = req.body;
 
     if (!empCode) {
       throw new AppError("Employee code is required", 400);
     }
 
     const result = await AttendanceService.markAttendance(empCode, {
+      companyCode,
       latitude,
       longitude,
+      status,
+      remarks,
+      selfieBase64,
       accuracy,
       selfieFilename
     });

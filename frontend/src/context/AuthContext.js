@@ -8,6 +8,46 @@ import AuthService from "../services/auth/authService";
 
 export const AuthContext = createContext();
 
+const safeGetItem = (key, fallback = "") => {
+  try {
+    return localStorage.getItem(key) ?? fallback;
+  } catch (error) {
+    return fallback;
+  }
+};
+
+const safeSetItem = (key, value) => {
+  try {
+    localStorage.setItem(key, String(value));
+    return true;
+  } catch (error) {
+    return false;
+  }
+};
+
+const isJwtExpired = (token) => {
+  if (!token || typeof token !== "string") {
+    return true;
+  }
+
+  const parts = token.split(".");
+  if (parts.length !== 3) {
+    return true;
+  }
+
+  try {
+    const payload = JSON.parse(
+      atob(parts[1].replace(/-/g, "+").replace(/_/g, "/"))
+    );
+    if (!payload || typeof payload.exp !== "number") {
+      return false;
+    }
+    return payload.exp * 1000 <= Date.now();
+  } catch (error) {
+    return true;
+  }
+};
+
 export const AuthProvider = ({ children }) => {
   const [user, setUser] = useState(null);
   const [isLoggedIn, setIsLoggedIn] = useState(false);
@@ -17,18 +57,29 @@ export const AuthProvider = ({ children }) => {
   // Initialize auth state from storage
   useEffect(() => {
     const initializeAuth = () => {
-      const token = localStorage.getItem("token");
-      const companyCode = localStorage.getItem("companyCode");
+      const token = safeGetItem("token");
+      const companyCode = safeGetItem("companyCode", "01");
+      const storedUserType = safeGetItem("userType", "employee");
+      const storedUsername = safeGetItem("username", safeGetItem("userName", "User"));
+      const storedEmpCode = safeGetItem("attendanceEmpCode", "");
+      const storedEmpName = safeGetItem("attendanceEmpName", storedUsername);
 
-      if (token) {
+      if (token && !isJwtExpired(token)) {
         setIsLoggedIn(true);
-        // You can fetch full user profile here if needed
         setUser({
           token,
           companyCode,
-          empCode: localStorage.getItem("attendanceEmpCode"),
-          empName: localStorage.getItem("attendanceEmpName"),
+          username: storedUsername,
+          userType: storedUserType,
+          empCode: storedEmpCode,
+          empName: storedEmpName,
         });
+        window.COMPANY_CODE = companyCode;
+        window.COMPANY_NAME = localStorage.getItem("companyName") || window.COMPANY_NAME || "Company";
+      } else {
+        AuthService.clearStorageOnLogout();
+        setUser(null);
+        setIsLoggedIn(false);
       }
       setLoading(false);
     };
@@ -36,47 +87,54 @@ export const AuthProvider = ({ children }) => {
     initializeAuth();
   }, []);
 
-  const login = useCallback(async (username, password) => {
+  const login = useCallback(async (username, password, companyCode) => {
     setLoading(true);
     setError(null);
     try {
-      const response = await AuthService.login(username, password);
+      AuthService.clearStorageOnLogout();
+      const response = await AuthService.login(username, password, companyCode);
 
-      // Store tokens
       if (response.token || response.accessToken) {
-        localStorage.setItem("token", response.token || response.accessToken);
+        safeSetItem("token", response.token || response.accessToken);
       }
       if (response.refreshToken || response.refresh_token) {
-        localStorage.setItem(
-          "refreshToken",
-          response.refreshToken || response.refresh_token
-        );
+        safeSetItem("refreshToken", response.refreshToken || response.refresh_token);
       }
 
-      // Store company info
-      const companyCode = response.companycode || "01";
-      localStorage.setItem("companyCode", companyCode);
-      window.COMPANY_CODE = companyCode;
+      const resolvedCompanyCode = response.companycode || response.companyCode || safeGetItem("companyCode", "01") || "01";
+      const companyName = response.companyName || response.companyname || response.company_name || safeGetItem("companyName", "Company") || "Company";
+      safeSetItem("companyCode", resolvedCompanyCode);
+      safeSetItem("companyName", companyName);
+      window.COMPANY_CODE = resolvedCompanyCode;
+      window.COMPANY_NAME = companyName;
 
-      // Store user info
       const userType = response.userType || response.usertype || "employee";
+      const usernameFromServer = response.username || response.userName || username;
+      const empName = response.empName || response.empname || usernameFromServer;
+      const empCode = response.empcode || response.empCode || response.employeecode || usernameFromServer;
+
       const userData = {
         token: response.token || response.accessToken,
-        companyCode,
+        companyCode: resolvedCompanyCode,
+        companyName,
         userType,
-        empName: response.empName || response.empname || username,
+        username: usernameFromServer,
+        empName,
+        empCode,
       };
 
-      if (userType === "employee") {
-        userData.empCode = username;
-        localStorage.setItem("attendanceEmpCode", username);
-        localStorage.setItem("attendanceEmpName", userData.empName);
-      }
-
+      // Store employee info in localStorage for all user types
+      safeSetItem("attendanceEmpCode", empCode);
+      safeSetItem("attendanceEmpName", empName);
+      safeSetItem("username", usernameFromServer);
+      safeSetItem("userName", usernameFromServer);
+      safeSetItem("userType", userType);
+      safeSetItem("userData", JSON.stringify(userData));
       setUser(userData);
       setIsLoggedIn(true);
       return response;
     } catch (err) {
+      AuthService.clearStorageOnLogout();
       setError(err.message || "Login failed");
       throw err;
     } finally {
@@ -86,12 +144,30 @@ export const AuthProvider = ({ children }) => {
 
   const logout = useCallback(async () => {
     setLoading(true);
+    setError(null);
     try {
       await AuthService.logout();
       setUser(null);
       setIsLoggedIn(false);
+      try {
+        localStorage.removeItem("token");
+        localStorage.removeItem("refreshToken");
+        localStorage.removeItem("companyCode");
+        localStorage.removeItem("companyName");
+        localStorage.removeItem("attendanceEmpCode");
+        localStorage.removeItem("attendanceEmpName");
+        localStorage.removeItem("username");
+        localStorage.removeItem("userName");
+        localStorage.removeItem("userType");
+        localStorage.removeItem("userData");
+      } catch (error) {
+        // ignore storage cleanup errors on iOS/private browsing
+      }
+      delete window.COMPANY_CODE;
+      delete window.COMPANY_NAME;
     } catch (err) {
       console.error("Logout error:", err);
+      setError(err.message || "Logout failed");
     } finally {
       setLoading(false);
     }

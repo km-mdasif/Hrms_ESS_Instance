@@ -15,8 +15,9 @@ const router = express.Router();
  */
 router.get("/leave-entries", async (req, res, next) => {
   try {
-    const { empCode, status } = req.query;
-    const leaves = await LeaveService.getLeaveEntries({ empCode, status });
+    const empCode = req.query.empCode || req.query.empcode || req.query.employeeCode || null;
+    const status = req.query.status || null;
+    const leaves = await LeaveService.getLeaveEntries({ empCode, status, isAdmin: req.user?.userType === "admin" || req.user?.role === "admin" });
 
     res.json({
       success: true,

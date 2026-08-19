@@ -234,16 +234,18 @@ export default function InterviewScreen() {
   return (
     <Stack spacing={0}>
       {/* Header Card */}
-      <Card sx={{ borderRadius: 3, bgcolor: "#ffffff", border: "1px solid #f3f4f6", boxShadow: "0 1px 3px rgba(0,0,0,0.08)" }}>
-        <CardContent>
-          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={2}>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 3 }}>
+          <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" spacing={2} alignItems={{ xs: "flex-start", md: "center" }}>
             <Box>
-              <Typography variant="h5" fontWeight={800} sx={{ color: "#1f2937" }}>Interview Management</Typography>
-              <Typography color="text.secondary">Create, manage and review candidate interviews</Typography>
+              <Typography variant="h5" fontWeight={800}>Interview Management</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>Create, manage and review candidate interviews</Typography>
             </Box>
-            <Chip icon={<Person />} label="Recruitment" color="primary" />
+            <Stack direction="row" spacing={1}>
+              <Chip icon={<Person />} label="Recruitment" sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }} />
+            </Stack>
           </Stack>
-        </CardContent>
+        </Box>
       </Card>
 
       {/* Alerts */}

@@ -15,3 +15,4 @@ export { default as useLeave } from "./useLeave";
 export { default as useInterview } from "./useInterview";
 export { default as useVisitor } from "./useVisitor";
 export { default as useDashboard } from "./useDashboard";
+export { default as useFieldExecutive } from "./useFieldExecutive";

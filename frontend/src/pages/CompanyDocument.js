@@ -169,29 +169,37 @@ export default function CompanyDocument() {
   };
 
   return (
-    <Box sx={{ p: 3, bgcolor: "#f5f7fb", minHeight: "100%" }}>
-      <Stack direction={{ xs: "column", md: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", md: "center" }} spacing={2} sx={{ mb: 3 }}>
-        <Typography variant="h4" fontWeight={700}>
-          Company Documents
-        </Typography>
-        <Button variant="contained" startIcon={<UploadIcon />} onClick={() => setOpenUpload(true)} disabled={loading}>
-          Upload Company Document
-        </Button>
-      </Stack>
+    <Box sx={{ display: "grid", gap: 3 }}>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 3 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+            <Box>
+              <Typography variant="h5" fontWeight={800}>Company Documents</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>Manage and store company-wide documents</Typography>
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Chip label="Company" sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }} />
+              <Button 
+                variant="outlined"
+                startIcon={<UploadIcon />} 
+                onClick={() => setOpenUpload(true)} 
+                disabled={loading}
+                sx={{ borderColor: "rgba(255,255,255,0.5)", color: "#fff", fontWeight: 700 }}
+              >
+                Upload
+              </Button>
+            </Stack>
+          </Stack>
+        </Box>
+      </Card>
 
-      {pageMessage ? (
-        <Typography variant="body2" color={pageSeverity === "success" ? "success.main" : pageSeverity === "error" ? "error.main" : "text.secondary"} sx={{ mb: 2 }}>
-          {pageMessage}
-        </Typography>
-      ) : null}
-
-      <Card>
-        <CardContent>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <CardContent sx={{ p: 3 }}>
           <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ mb: 2 }}>
             <Typography variant="h6" fontWeight={700}>
               Stored Company Documents
             </Typography>
-            <Chip label={documents.length ? `${documents.length} document(s)` : "No documents yet"} color="primary" variant="outlined" />
+            <Chip label={documents.length ? `${documents.length} document(s)` : "No documents yet"} sx={{ background: "#f0f9ff", color: "#0c7a4c", fontWeight: 700 }} />
           </Stack>
 
           <TableContainer component={Paper} sx={{ borderRadius: 3 }}>

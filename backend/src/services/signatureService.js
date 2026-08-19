@@ -3,7 +3,7 @@
  * Handles digital signature management
  */
 
-const { executeQuery } = require("../database/db");
+const { executeStoredProcedure } = require("../database/db");
 const { AppError } = require("../middleware/errorMiddleware");
 const { deleteFile } = require("../utils/fileManager");
 
@@ -13,36 +13,13 @@ class SignatureService {
    */
   static async uploadSignature(empCode, file) {
     try {
-      const params = {
-        empCode: String(empCode).trim(),
-        filename: file.filename,
-        originalName: file.originalname,
-        mimeType: file.mimetype,
-        uploadedAt: new Date()
-      };
-
-      // Check if signature already exists
-      const existing = await executeQuery(
-        `SELECT filename FROM EmpSignature WHERE empCode = @empCode`,
-        { empCode: params.empCode }
-      );
-
-      if (existing.recordset && existing.recordset.length > 0) {
-        // Delete old signature
-        deleteFile(existing.recordset[0].filename);
-        // Update existing
-        await executeQuery(
-          `UPDATE EmpSignature SET filename = @filename, mimeType = @mimeType, uploadedAt = @uploadedAt WHERE empCode = @empCode`,
-          params
-        );
-      } else {
-        // Insert new
-        await executeQuery(
-          `INSERT INTO EmpSignature (empCode, filename, originalName, mimeType, uploadedAt)
-           VALUES (@empCode, @filename, @originalName, @mimeType, @uploadedAt)`,
-          params
-        );
-      }
+      await executeStoredProcedure("sp_webapi", {
+        operation: "upsert_emp_signature",
+        companycode: "01",
+        empcode: String(empCode || "").trim(),
+        signatureimage: file?.buffer || null,
+        description: file?.originalname || "signature"
+      });
 
       return { success: true, filename: file.filename };
     } catch (error) {
@@ -57,10 +34,10 @@ class SignatureService {
    */
   static async getSignature(empCode) {
     try {
-      const result = await executeQuery(
-        `SELECT filename FROM EmpSignature WHERE empCode = @empCode`,
-        { empCode: String(empCode).trim() }
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_emp_signature",
+        empcode: String(empCode || "").trim()
+      });
 
       return result.recordset?.[0] || null;
     } catch (error) {
@@ -76,10 +53,10 @@ class SignatureService {
     try {
       deleteFile(filePath);
 
-      await executeQuery(
-        `DELETE FROM EmpSignature WHERE empCode = @empCode`,
-        { empCode: String(empCode).trim() }
-      );
+      await executeStoredProcedure("sp_webapi", {
+        operation: "delete_emp_signature",
+        empcode: String(empCode || "").trim()
+      });
 
       return { success: true };
     } catch (error) {

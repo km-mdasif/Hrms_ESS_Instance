@@ -33,14 +33,21 @@ const useAuth = () => {
 
       // Store company info
       const companyCode = response.companycode || "01";
+      const companyName = response.companyName || response.companyname || response.company_name || localStorage.getItem("companyName") || "Company";
       localStorage.setItem("companyCode", companyCode);
+      localStorage.setItem("companyName", companyName);
       window.COMPANY_CODE = companyCode;
+      window.COMPANY_NAME = companyName;
 
       // Store employee info if employee type
       const userType = response.userType || response.usertype || "employee";
+      const usernameFromServer = response.username || response.userName || username;
+      const empCode = response.empcode || response.empCode || response.employeecode || usernameFromServer;
+      const empName = response.empName || response.empname || usernameFromServer;
+      localStorage.setItem("username", usernameFromServer);
+      localStorage.setItem("userName", usernameFromServer);
+      localStorage.setItem("userType", userType);
       if (userType === "employee") {
-        const empCode = username;
-        const empName = response.empName || response.empname || username;
         localStorage.setItem("attendanceEmpCode", empCode);
         localStorage.setItem("attendanceEmpName", empName);
       }

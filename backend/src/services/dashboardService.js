@@ -3,7 +3,7 @@
  * Handles dashboard statistics and summaries
  */
 
-const { executeQuery } = require("../database/db");
+const { executeStoredProcedure } = require("../database/db");
 const { AppError } = require("../middleware/errorMiddleware");
 
 class DashboardService {
@@ -12,14 +12,7 @@ class DashboardService {
    */
   static async getDashboardSummary(companyCode) {
     try {
-      const [
-        employeeCount,
-        interviewsToday,
-        visitorsToday,
-        leaveCount,
-        geofenceCount,
-        fieldExecutivesCount
-      ] = await Promise.all([
+      const [employeeCount, interviewsToday, visitorsToday, leaveCount, geofenceCount, fieldExecutivesCount] = await Promise.all([
         this.getEmployeeCount(companyCode),
         this.getInterviewsToday(),
         this.getVisitorsToday(),
@@ -51,12 +44,12 @@ class DashboardService {
    */
   static async getEmployeeCount(companyCode) {
     try {
-      const result = await executeQuery(
-        `SELECT COUNT(*) as count FROM Employee WHERE companycode = @companyCode`,
-        { companyCode }
-      );
-
-      return result.recordset?.[0]?.count || 0;
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_active_employees",
+        table_name: "Employee",
+        column_name: "EmpStatus"
+      });
+      return Number(result.recordset?.[0]?.total_employees || 0);
     } catch (error) {
       console.error("[DashboardService] Get employee count error:", error);
       return 0;
@@ -68,14 +61,12 @@ class DashboardService {
    */
   static async getInterviewsToday() {
     try {
-      const result = await executeQuery(
-        `SELECT COUNT(*) as count FROM Interview 
-         WHERE CAST(interviewDate AS DATE) = CAST(GETDATE() AS DATE)
-         AND status != 'Cancelled'`,
-        {}
-      );
-
-      return result.recordset?.[0]?.count || 0;
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_interviews_today",
+        startDate: new Date(new Date().setHours(0, 0, 0, 0)),
+        endDate: new Date(new Date().setHours(23, 59, 59, 999))
+      });
+      return Number(result.recordset?.[0]?.interview_today_count || 0);
     } catch (error) {
       console.error("[DashboardService] Get interviews today error:", error);
       return 0;
@@ -87,13 +78,10 @@ class DashboardService {
    */
   static async getVisitorsToday() {
     try {
-      const result = await executeQuery(
-        `SELECT COUNT(*) as count FROM Visitor 
-         WHERE CAST(visitDate AS DATE) = CAST(GETDATE() AS DATE)`,
-        {}
-      );
-
-      return result.recordset?.[0]?.count || 0;
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_visitor_entries"
+      });
+      return Number(result.recordset?.[0]?.visitor_count || 0);
     } catch (error) {
       console.error("[DashboardService] Get visitors today error:", error);
       return 0;
@@ -105,15 +93,10 @@ class DashboardService {
    */
   static async getLeaveCount() {
     try {
-      const result = await executeQuery(
-        `SELECT COUNT(*) as count FROM LeaveLog 
-         WHERE CAST(leaveFromDate AS DATE) <= CAST(GETDATE() AS DATE)
-         AND CAST(leaveToDate AS DATE) >= CAST(GETDATE() AS DATE)
-         AND status = 'Approved'`,
-        {}
-      );
-
-      return result.recordset?.[0]?.count || 0;
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_leave_entries"
+      });
+      return Number(result.recordset?.[0]?.leave_count || 0);
     } catch (error) {
       console.error("[DashboardService] Get leave count error:", error);
       return 0;
@@ -125,13 +108,12 @@ class DashboardService {
    */
   static async getGeofenceCount() {
     try {
-      const result = await executeQuery(
-        `SELECT COUNT(*) as count FROM AttendanceLog 
-         WHERE latitude IS NOT NULL AND longitude IS NOT NULL`,
-        {}
-      );
-
-      return result.recordset?.[0]?.count || 0;
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_geofence_checkins",
+        startDate: new Date(new Date().setHours(0, 0, 0, 0)),
+        endDate: new Date(new Date().setHours(23, 59, 59, 999))
+      });
+      return Number(result.recordset?.[0]?.geofence_checkins || 0);
     } catch (error) {
       console.error("[DashboardService] Get geofence count error:", error);
       return 0;
@@ -143,14 +125,12 @@ class DashboardService {
    */
   static async getFieldExecutivesCount(companyCode) {
     try {
-      const result = await executeQuery(
-        `SELECT COUNT(*) as count FROM Employee 
-         WHERE companycode = @companyCode 
-         AND designation LIKE '%Field%'`,
-        { companyCode }
-      );
-
-      return result.recordset?.[0]?.count || 0;
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_active_employees",
+        table_name: "Employee",
+        column_name: "EmpStatus"
+      });
+      return Number(result.recordset?.[0]?.total_employees || 0);
     } catch (error) {
       console.error("[DashboardService] Get field executives count error:", error);
       return 0;
@@ -162,15 +142,13 @@ class DashboardService {
    */
   static async getAttendanceOverview(params = {}) {
     try {
-      const result = await executeQuery(
-        `SELECT TOP 7 CAST(attendancedate AS DATE) as date, COUNT(*) as count
-         FROM AttendanceLog
-         GROUP BY CAST(attendancedate AS DATE)
-         ORDER BY date DESC`,
-        {}
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "count_geofence_checkins",
+        startDate: params.startDate || new Date(new Date().setHours(0, 0, 0, 0)),
+        endDate: params.endDate || new Date(new Date().setHours(23, 59, 59, 999))
+      });
 
-      return result.recordset || [];
+      return result.recordset ? [{ date: new Date().toISOString(), count: Number(result.recordset?.[0]?.geofence_checkins || 0) }] : [];
     } catch (error) {
       console.error("[DashboardService] Get attendance overview error:", error);
       return [];

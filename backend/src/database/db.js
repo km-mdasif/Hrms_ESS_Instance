@@ -5,12 +5,12 @@
 
 const sql = require("mssql");
 
-const sqlServerInput = process.env.MSSQL_SERVER || process.env.DB_SERVER || "divineserver";
+const sqlServerInput = process.env.MSSQL_SERVER || process.env.DB_SERVER || "192.168.1.100";
 const sqlDatabase = process.env.MSSQL_DATABASE || process.env.DB_NAME || "hrms";
 const sqlUser = process.env.MSSQL_USER || process.env.DB_USER || "sa";
 const sqlPassword = process.env.MSSQL_PASSWORD || process.env.DB_PASSWORD || "sql@123";
 const sqlPortInput = process.env.MSSQL_PORT || process.env.DB_PORT || 2439;
-const sqlInstanceInput = process.env.MSSQL_INSTANCE || process.env.DB_INSTANCE || "SQL2022";
+const sqlInstanceInput = process.env.MSSQL_INSTANCE || process.env.DB_INSTANCE || "";
 
 /**
  * Parse SQL Server address
@@ -141,6 +141,7 @@ async function executeQuery(query, inputParams = {}) {
  */
 function getSqlType(value) {
   if (value === null || value === undefined) return sql.NVarChar;
+  if (Buffer.isBuffer(value)) return sql.Image;
   if (typeof value === "number") return Number.isInteger(value) ? sql.Int : sql.Float;
   if (typeof value === "boolean") return sql.Bit;
   if (value instanceof Date) return sql.DateTime2;

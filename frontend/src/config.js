@@ -8,43 +8,90 @@ const USE_ORIGIN = process.env.REACT_APP_API_USE_ORIGIN === "true";
 const normalizeHost = (host) => {
   if (!host) return "localhost";
   const normalized = String(host).trim();
-  return normalized === "0.0.0.0" ? "localhost" : normalized;
+  if (!normalized || normalized === "0.0.0.0") return "localhost";
+  return normalized;
 };
 
-const DEFAULT_API_BASE_URL = (() => {
-  if (typeof window !== "undefined") {
-    if (process.env.REACT_APP_API_BASE_URL) {
-      return process.env.REACT_APP_API_BASE_URL;
-    }
-
-    const host = normalizeHost(process.env.REACT_APP_API_HOST || window.location.hostname || "localhost");
-    const isSecure =
-      window.location.protocol === "https:" ||
-      process.env.REACT_APP_API_SECURE === "true" ||
-      process.env.REACT_APP_API_HTTPS === "true" ||
-      process.env.REACT_APP_API_SSL === "true";
-    const protocol = isSecure ? "https" : "http";
-    const port = isSecure ? DEFAULT_API_HTTPS_PORT : DEFAULT_API_HTTP_PORT;
-
-    if (USE_ORIGIN && window.location.origin) {
-      return window.location.origin;
-    }
-
-    if (host === "localhost" || host === "127.0.0.1" || host === "::1") {
-      return `${protocol}://localhost:${port}`;
-    }
-
-    return `${protocol}://${host}:${port}`;
+const getGlobalConfig = () => {
+  if (typeof window === "undefined") {
+    return {};
   }
 
-  return process.env.REACT_APP_API_BASE_URL || `http://${normalizeHost(DEFAULT_API_HOST)}:${DEFAULT_API_HTTP_PORT}`;
-})();
+  return window.__APP_CONFIG__ || window.__GLOBAL_API_CONFIG__ || {};
+};
+
+const resolveBaseUrl = () => {
+  const globalConfig = getGlobalConfig();
+  const configuredBaseUrl =
+    process.env.REACT_APP_API_BASE_URL ||
+    globalConfig.apiBaseUrl ||
+    globalConfig.API_BASE_URL ||
+    globalConfig.apiUrl ||
+    globalConfig.API_URL ||
+    "";
+
+  if (configuredBaseUrl) {
+    return String(configuredBaseUrl).replace(/\/+$/, "");
+  }
+
+  const configuredHost = normalizeHost(
+    process.env.REACT_APP_API_HOST ||
+      globalConfig.apiHost ||
+      globalConfig.API_HOST ||
+      DEFAULT_API_HOST ||
+      "localhost"
+  );
+
+  const configuredHttpPort = Number(
+    process.env.REACT_APP_API_HTTP_PORT ||
+      globalConfig.apiPort ||
+      globalConfig.API_PORT ||
+      DEFAULT_API_HTTP_PORT
+  ) || DEFAULT_API_HTTP_PORT;
+
+  if (typeof window !== "undefined") {
+    const currentHost = normalizeHost(window.location.hostname || "localhost");
+    const protocol = window.location.protocol === "https:" ? "https" : "http";
+    const configuredPort = protocol === "https" ? DEFAULT_API_HTTPS_PORT : configuredHttpPort;
+
+    if (USE_ORIGIN && window.location.origin) {
+      return window.location.origin.replace(/\/+$/, "");
+    }
+
+    if (configuredHost && configuredHost !== "localhost" && configuredHost !== "127.0.0.1" && configuredHost !== "::1") {
+      return `${protocol}://${configuredHost}:${configuredPort}`;
+    }
+
+    if (currentHost === "localhost" || currentHost === "127.0.0.1" || currentHost === "::1") {
+      return `http://localhost:${configuredPort}`;
+    }
+
+    if (/^(192\.168\.|10\.|172\.(1[6-9]|2\d|3[01])\.)/.test(currentHost)) {
+      return `${protocol}://${currentHost}:${configuredPort}`;
+    }
+
+    return `http://${currentHost}:${configuredPort}`;
+  }
+
+  return `http://${configuredHost}:${configuredHttpPort}`;
+};
+
+const DEFAULT_API_BASE_URL = resolveBaseUrl();
 
 export const API_BASE_URL =
-  process.env.REACT_APP_API_BASE_URL || DEFAULT_API_BASE_URL;
+  process.env.REACT_APP_API_BASE_URL ||
+  getGlobalConfig().apiBaseUrl ||
+  getGlobalConfig().API_BASE_URL ||
+  DEFAULT_API_BASE_URL;
 
-// Helpful debug: show resolved API base when running in browser console
 if (typeof window !== "undefined") {
+  window.__APP_CONFIG__ = {
+    ...(window.__APP_CONFIG__ || {}),
+    apiBaseUrl: API_BASE_URL,
+    apiHost: normalizeHost(process.env.REACT_APP_API_HOST || getGlobalConfig().apiHost || window.location.hostname || "localhost"),
+    apiPort: Number(process.env.REACT_APP_API_HTTP_PORT || getGlobalConfig().apiPort || DEFAULT_API_HTTP_PORT),
+  };
+
   // eslint-disable-next-line no-console
   console.debug("API_BASE_URL:", API_BASE_URL);
 }

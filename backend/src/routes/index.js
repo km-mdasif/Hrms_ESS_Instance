@@ -13,5 +13,6 @@ module.exports = {
   documentRoutes: require("./documentRoutes"),
   employeeRoutes: require("./employeeRoutes"),
   imageRoutes: require("./imageRoutes"),
-  signatureRoutes: require("./signatureRoutes")
+  signatureRoutes: require("./signatureRoutes"),
+  fieldExecutiveRoutes: require("./fieldExecutiveRoutes")
 };

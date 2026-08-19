@@ -3,7 +3,7 @@
  * Handles authentication business logic
  */
 
-const { executeQuery } = require("../database/db");
+const { executeStoredProcedure } = require("../database/db");
 const { createAccessToken, createRefreshToken, verifyRefreshToken } = require("../utils/tokenManager");
 const { AppError } = require("../middleware/errorMiddleware");
 
@@ -20,37 +20,67 @@ class AuthService {
         throw new AppError("Username and password are required", 400);
       }
 
-      // Query to get user from database
-      // This assumes a stored procedure or query that validates credentials
-      const result = await executeQuery(
-        `SELECT TOP 1 username, companycode, userType, empName, empcode 
-         FROM [User] 
-         WHERE username = @username AND password = @password`,
-        { username: trimmedUsername, password: trimmedPassword }
-      );
+      const userResult = await executeStoredProcedure("sp_webapi", {
+        operation: "authenticate_user",
+        username: trimmedUsername,
+        password: trimmedPassword
+      });
 
-      if (!result.recordset || result.recordset.length === 0) {
+      if (!userResult.recordset || userResult.recordset.length === 0) {
         throw new AppError("Invalid username or password", 401);
       }
 
-      const user = result.recordset[0];
-      const companyCode = String(user.companycode || "01").trim() || "01";
+      const authRow = userResult.recordset[0];
+      const userType = String(authRow.usertype || "employee").toLowerCase();
+      const normalizedUserName = String(authRow.username || trimmedUsername).trim();
+      const empCode = String(authRow.empcode || authRow.employeecode || "").trim();
+
+      const userRecord = {
+        UserCode: authRow.usercode || authRow.UserCode || "",
+        UserName: normalizedUserName,
+        employeecode: empCode,
+        IsAdmin: userType === "admin",
+        IsAudit: userType === "auditor",
+        IsActive: 1,
+        userType,
+        empname: authRow.empname || authRow.EmpName || normalizedUserName,
+        companycode: authRow.companycode || authRow.CompanyCode || "01"
+      };
+
+      let companyCode = String(userRecord.companycode || "01").trim() || "01";
+      let empName = userRecord.empname || userRecord.UserName || "User";
+
+      if (empCode) {
+        try {
+          const empResult = await executeStoredProcedure("sp_webapi", {
+            operation: "get_employee_details",
+            empcode: empCode
+          });
+
+          if (empResult.recordset && empResult.recordset.length > 0) {
+            const empRecord = empResult.recordset[0];
+            companyCode = String(empRecord.companycode || empRecord.CompanyCode || "01").trim() || "01";
+            empName = String(empRecord.empname || empRecord.EmpName || userRecord.UserName || userRecord.username).trim() || userRecord.UserName || userRecord.username;
+          }
+        } catch (empError) {
+          console.warn("[AuthService] Failed to fetch employee details:", empError);
+        }
+      }
 
       // Create tokens
-      const accessToken = createAccessToken(user, companyCode);
-      const refreshToken = createRefreshToken(user, companyCode);
+      const accessToken = createAccessToken(userRecord, companyCode);
+      const refreshToken = createRefreshToken(userRecord, companyCode);
 
       return {
         token: accessToken,
         accessToken,
         refreshToken,
-        user: {
-          username: user.username,
-          companycode: companyCode,
-          userType: user.userType || "employee",
-          empName: user.empName || user.username,
-          empcode: user.empcode
-        }
+        username: userRecord.UserName,
+        usercode: userRecord.UserCode,
+        companycode: companyCode,
+        userType,
+        empName,
+        empcode: empCode
       };
     } catch (error) {
       if (error instanceof AppError) throw error;
@@ -90,7 +120,9 @@ class AuthService {
    */
   static async getCompanies() {
     try {
-      const result = await executeQuery("SELECT companycode, companyname FROM Company");
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_companies"
+      });
       return result.recordset || [];
     } catch (error) {
       console.error("[AuthService] Get companies error:", error);
@@ -103,18 +135,48 @@ class AuthService {
    */
   static async getUserProfile(username) {
     try {
-      const result = await executeQuery(
-        `SELECT username, companycode, userType, empName, empcode 
-         FROM [User] 
-         WHERE username = @username`,
-        { username }
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_user_profile",
+        username: String(username || "").trim()
+      });
 
       if (!result.recordset || result.recordset.length === 0) {
         throw new AppError("User not found", 404);
       }
 
-      return result.recordset[0];
+      const userRecord = result.recordset[0];
+      const empCode = String(userRecord.employeecode || "").trim();
+
+      let companyCode = String(userRecord.companycode || "01").trim() || "01";
+      let empName = userRecord.UserName || userRecord.username || userRecord.EmpName || "User";
+
+      if (empCode) {
+        try {
+          const empResult = await executeStoredProcedure("sp_webapi", {
+            operation: "get_employee_details",
+            empcode: empCode
+          });
+
+          if (empResult.recordset && empResult.recordset.length > 0) {
+            const empRecord = empResult.recordset[0];
+            companyCode = String(empRecord.companycode || empRecord.CompanyCode || "01").trim() || "01";
+            empName = String(empRecord.empname || empRecord.EmpName || userRecord.UserName || userRecord.username).trim() || userRecord.UserName || userRecord.username;
+          }
+        } catch (empError) {
+          console.warn("[AuthService] Failed to fetch employee details:", empError);
+        }
+      }
+
+      const userType = userRecord.IsAdmin ? "admin" : (userRecord.IsAudit ? "auditor" : "employee");
+
+      return {
+        username: userRecord.UserName,
+        usercode: userRecord.UserCode,
+        companycode: companyCode,
+        userType,
+        empName,
+        empcode: empCode
+      };
     } catch (error) {
       if (error instanceof AppError) throw error;
       console.error("[AuthService] Get user profile error:", error);

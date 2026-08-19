@@ -6,12 +6,15 @@
 import axios from "axios";
 import { API_BASE_URL } from "../../config";
 
+console.log("[API Client] Using API_BASE_URL:", API_BASE_URL);
+
 const apiClient = axios.create({
   baseURL: API_BASE_URL,
-  timeout: 10000,
+  timeout: 15000,
   headers: {
     "Content-Type": "application/json",
   },
+  withCredentials: true, // Include credentials for CORS requests
 });
 
 // Request interceptor - Add token to headers
@@ -31,6 +34,23 @@ apiClient.interceptors.response.use(
   (response) => response,
   async (error) => {
     const originalRequest = error.config;
+    
+    // Log network errors for debugging
+    if (!error.response) {
+      console.error("[API Network Error]", {
+        message: error.message,
+        code: error.code,
+        url: error.config?.url,
+        baseURL: error.config?.baseURL,
+        method: error.config?.method,
+      });
+    } else {
+      console.error("[API Response Error]", {
+        status: error.response.status,
+        url: error.config?.url,
+        message: error.response.data?.message || error.message,
+      });
+    }
 
     // Handle 401 Unauthorized - Token expired
     if (error.response?.status === 401 && !originalRequest._retry) {

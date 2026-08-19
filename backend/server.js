@@ -26,6 +26,7 @@ app.use((req,res,next)=>{
 });
 
 const DEFAULT_DOCUMENT_PATH=path.resolve(__dirname,"document-storage");
+const DEFAULT_COMPANY_CODE="01";
 const upload=multer({
  dest:DEFAULT_DOCUMENT_PATH,
  limits:{fileSize:10*1024*1024}
@@ -133,10 +134,10 @@ function requireAuth(req,res,next){
   req.user=jwt.verify(token,ACCESS_TOKEN_SECRET);
   // ensure companycode default and padding
   try{
-   const cc = String(req.user?.companycode || "01").trim();
-   req.user.companycode = (/^\d$/.test(cc) ? cc.padStart(2,'0') : (cc || '01'));
+   const cc = String(req.user?.companycode || DEFAULT_COMPANY_CODE).trim();
+   req.user.companycode = (/^\d$/.test(cc) ? cc.padStart(2,'0') : (cc || DEFAULT_COMPANY_CODE));
   }catch(e){
-   req.user.companycode = '01';
+   req.user.companycode = DEFAULT_COMPANY_CODE;
   }
   return next();
  }catch(err){
@@ -152,7 +153,7 @@ function sanitizePathSegment(value){
 }
 
 function buildDocumentFilename(companycode,empcode,extension=""){
- const safeCompanyCode=sanitizePathSegment(companycode || "01");
+ const safeCompanyCode=sanitizePathSegment(companycode || DEFAULT_COMPANY_CODE);
  const safeEmpCode=sanitizePathSegment(empcode || "");
  const normalizedExtension=String(extension || "").trim().replace(/^\./, "");
  const baseName=`${safeCompanyCode}_${safeEmpCode}`;
@@ -165,9 +166,9 @@ function buildDocumentFolderPath(documentPath,documentname){
 }
 
 function buildCompanyDocumentBaseName(documentCode, documentName) {
- const safeCode = sanitizePathSegment(documentCode || "01").replace(/\s+/g, "_");
+ const safeCode = sanitizePathSegment(documentCode || DEFAULT_COMPANY_CODE).replace(/\s+/g, "_");
  const safeName = sanitizePathSegment(documentName || "document").replace(/\s+/g, "_");
- const normalizedCode = safeCode || "01";
+ const normalizedCode = safeCode || DEFAULT_COMPANY_CODE;
  const normalizedName = safeName || "document";
  return `${normalizedCode}_${normalizedName}`;
 }
@@ -240,368 +241,66 @@ async function ensureEmpImageTable(){
 
 async function ensureEmpSignatureTable(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'empsignature')
-  BEGIN
-   CREATE TABLE [dbo].[empsignature] (
-    [companycode] NVARCHAR(50) NULL,
-    [empcode] NVARCHAR(50) NOT NULL,
-    [signatureimage] IMAGE NULL,
-    [description] NVARCHAR(200) NULL
-   );
-   CREATE INDEX idx_empsignature_empcode ON [dbo].[empsignature] ([empcode]);
-  END
-  IF COL_LENGTH('dbo.empsignature', 'companycode') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[empsignature] ADD [companycode] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.empsignature', 'signatureimage') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[empsignature] ADD [signatureimage] IMAGE NULL;
-  END
-  IF COL_LENGTH('dbo.empsignature', 'description') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[empsignature] ADD [description] NVARCHAR(200) NULL;
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_emp_signature_table")
+  .execute("sp_webapi");
 }
 
 async function ensureAttendanceGeofenceTable(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'AttendanceGeofence')
-  BEGIN
-   CREATE TABLE [dbo].[AttendanceGeofence] (
-    [AttendanceID] INT IDENTITY(1,1) NOT NULL PRIMARY KEY,
-    [companycode] NVARCHAR(50) NOT NULL,
-    [empcode] NVARCHAR(50) NOT NULL,
-    [attendancedate] DATETIME NOT NULL DEFAULT GETDATE(),
-    [latitude] DECIMAL(10,8) NOT NULL,
-    [longitude] DECIMAL(11,8) NOT NULL,
-    [selfiimage] IMAGE NULL,
-    [selfieimage_base64] NVARCHAR(MAX) NULL,
-    [status] NVARCHAR(20) NOT NULL DEFAULT 'Present',
-    [remarks] NVARCHAR(500) NULL,
-    [geofenceradius] DECIMAL(10,2) NULL
-   );
-   CREATE INDEX idx_attendance_empcode ON [dbo].[AttendanceGeofence] ([empcode]);
-   CREATE INDEX idx_attendance_date ON [dbo].[AttendanceGeofence] ([attendancedate]);
-   CREATE INDEX idx_attendance_company ON [dbo].[AttendanceGeofence] ([companycode]);
-  END
-  IF COL_LENGTH('dbo.AttendanceGeofence', 'selfiimage') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[AttendanceGeofence] ADD [selfiimage] IMAGE NULL;
-  END
-  IF COL_LENGTH('dbo.AttendanceGeofence', 'selfieimage_base64') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[AttendanceGeofence] ADD [selfieimage_base64] NVARCHAR(MAX) NULL;
-  END
-  IF COL_LENGTH('dbo.AttendanceGeofence', 'geofenceradius') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[AttendanceGeofence] ADD [geofenceradius] DECIMAL(10,2) NULL;
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_attendance_geofence_table")
+  .execute("sp_webapi");
+}
+
+async function ensureFieldExecutiveTable(){
+ const dbPool=await getPool();
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_field_executive_table")
+  .execute("sp_webapi");
 }
 
 async function ensureCompanyDocumentTable(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'DocumentCompany')
-  BEGIN
-   CREATE TABLE [dbo].[DocumentCompany](
-    [DocumentID] [int] IDENTITY(1,1) NOT NULL,
-    [DocumentCode] [nvarchar](50) NULL,
-    [DocumentName] [nvarchar](50) NULL,
-    [DocumentExtension] [nvarchar](50) NULL,
-    [Status] [bit] NULL,
-    [ExpiryDate] [datetime] NULL,
-    [RemainderOn] [datetime] NULL,
-    CONSTRAINT [PK_DocumentCompany] PRIMARY KEY CLUSTERED ([DocumentID] ASC)
-   ) ON [PRIMARY];
-   CREATE INDEX idx_documentcompany_name ON [dbo].[DocumentCompany] ([DocumentName]);
-  END
-  IF COL_LENGTH('dbo.DocumentCompany', 'DocumentCode') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[DocumentCompany] ADD [DocumentCode] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.DocumentCompany', 'DocumentName') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[DocumentCompany] ADD [DocumentName] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.DocumentCompany', 'DocumentExtension') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[DocumentCompany] ADD [DocumentExtension] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.DocumentCompany', 'Status') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[DocumentCompany] ADD [Status] BIT NULL;
-  END
-  IF COL_LENGTH('dbo.DocumentCompany', 'ExpiryDate') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[DocumentCompany] ADD [ExpiryDate] DATETIME NULL;
-  END
-  IF COL_LENGTH('dbo.DocumentCompany', 'RemainderOn') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[DocumentCompany] ADD [RemainderOn] DATETIME NULL;
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_company_document_table")
+  .execute("sp_webapi");
 }
 
 async function ensureLeaveLogTable(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'LeaveLog')
-  BEGIN
-   CREATE TABLE [dbo].[LeaveLog](
-    [LeaveLogID] [int] IDENTITY(1,1) NOT NULL,
-    [CompanyCode] [nvarchar](50) NULL,
-    [EmpCode] [nvarchar](50) NULL,
-    [FromDate] [datetime] NULL,
-    [ToDate] [datetime] NULL,
-    [Information] [nvarchar](50) NULL,
-    [Description] [nvarchar](500) NULL,
-    [isApproved] [bit] NOT NULL CONSTRAINT [DF__LeaveLog__isAppr__25077354] DEFAULT ((0)),
-    [IsCancel] [bit] NOT NULL CONSTRAINT [DF_LeaveLog_IsCancel] DEFAULT ((0)),
-    CONSTRAINT [PK_LeaveLog] PRIMARY KEY CLUSTERED ([LeaveLogID] ASC)
-   ) ON [PRIMARY];
-   CREATE INDEX idx_leave_log_empcode ON [dbo].[LeaveLog] ([EmpCode]);
-   CREATE INDEX idx_leave_log_company ON [dbo].[LeaveLog] ([CompanyCode]);
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'CompanyCode') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [CompanyCode] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'EmpCode') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [EmpCode] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'FromDate') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [FromDate] DATETIME NULL;
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'ToDate') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [ToDate] DATETIME NULL;
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'Information') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [Information] NVARCHAR(50) NULL;
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'Description') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [Description] NVARCHAR(500) NULL;
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'isApproved') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [isApproved] BIT NOT NULL CONSTRAINT [DF__LeaveLog__isAppr__25077354] DEFAULT ((0));
-  END
-  IF COL_LENGTH('dbo.LeaveLog', 'IsCancel') IS NULL
-  BEGIN
-   ALTER TABLE [dbo].[LeaveLog] ADD [IsCancel] BIT NOT NULL CONSTRAINT [DF_LeaveLog_IsCancel] DEFAULT ((0));
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_leave_log_table")
+  .execute("sp_webapi");
 }
 
 async function ensureInterviewTables(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewEntry')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewEntry](
-    [InterviewID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewCode] [nvarchar](50) NOT NULL,
-    [CompanyCode] [nvarchar](50) NULL,
-    [InterviewDate] [datetime] NULL,
-    [CandidateName] [nvarchar](50) NULL,
-    [Gender] [nvarchar](50) NULL,
-    [Age] [int] NULL,
-    [MaritialStatus] [nvarchar](50) NULL,
-    [ContactNumber] [nvarchar](50) NULL,
-    [ContactNumber1] [nvarchar](50) NULL,
-    [EmailID] [nvarchar](50) NULL,
-    [Address] [nvarchar](max) NULL,
-    [PermanentLocation] [nvarchar](250) NULL,
-    [PresentLocation] [nvarchar](250) NULL,
-    [HighestQualification] [nvarchar](50) NULL,
-    [PreviousDesignation] [nvarchar](250) NULL,
-    [PostingApplyingFor] [nvarchar](250) NULL,
-    [Category] [nvarchar](50) NULL,
-    [RefferedBy] [nvarchar](150) NULL,
-    [ReasontoReleave] [nvarchar](max) NULL,
-    [Remarks] [nvarchar](max) NULL,
-    [TotalExperience] [decimal](18, 2) NULL,
-    [CurrentCTC] [decimal](18, 0) NULL,
-    [ExpectedCTC] [decimal](18, 2) NULL,
-    [ExpectedCTCNegotiable] [bit] NULL,
-    [NoticePeriod] [decimal](18, 2) NULL,
-    [NoticePeriodNegotiable] [bit] NULL,
-    [ExpectedJoiningDate] [datetime] NULL,
-    CONSTRAINT [PK_InterviewEntry] PRIMARY KEY CLUSTERED ([InterviewID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewTimeEntry')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewTimeEntry](
-    [InterviewTimeID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewID] [int] NULL,
-    [InterviewDateTime] [datetime] NULL,
-    [notes] [nvarchar](max) NULL,
-    CONSTRAINT [PK_InterviewTimeEntry] PRIMARY KEY CLUSTERED ([InterviewTimeID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewSkillEntry')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewSkillEntry](
-    [SkillID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewID] [int] NULL,
-    [SkillName] [nvarchar](150) NULL,
-    [Experience] [decimal](18, 2) NULL,
-    CONSTRAINT [PK_InterviewSkillEntry] PRIMARY KEY CLUSTERED ([SkillID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewRelationEntry')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewRelationEntry](
-    [RelationID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewID] [int] NULL,
-    [RelationName] [nvarchar](150) NULL,
-    [Relationship] [nvarchar](150) NULL,
-    [Age] [int] NULL,
-    CONSTRAINT [PK_InterviewRelationEntry] PRIMARY KEY CLUSTERED ([RelationID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewTimeEntryLevel')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewTimeEntryLevel](
-    [InterviewTimeEntryLevelID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewID] [int] NULL,
-    [ConductedBy] [nvarchar](max) NULL,
-    [NotesConductedBy] [nvarchar](max) NULL,
-    [NotesCandiadate] [nvarchar](max) NULL,
-    [RoundStatus] [int] NULL,
-    [RoundScore] [int] NULL,
-    [MoveToNextRound] [bit] NULL,
-    CONSTRAINT [PK_InterviewFinalEntry] PRIMARY KEY CLUSTERED ([InterviewTimeEntryLevelID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewFinalEntry')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewFinalEntry](
-    [InterviewFinalID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewID] [int] NULL,
-    [IDProof] [nvarchar](50) NULL,
-    [IDProofNumber] [nvarchar](50) NULL,
-    [FinalRoundStatus] [int] NULL,
-    [FinalRoundScore] [int] NULL,
-    [InterviewStatus] [int] NULL,
-    [Notes] [nvarchar](max) NULL,
-    [JoiningDate] [datetime] NULL,
-    [FixedCTC] [int] NULL,
-    CONSTRAINT [PK_InterviewFinalEntry] PRIMARY KEY CLUSTERED ([InterviewFinalID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewExperienceEntry')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewExperienceEntry](
-    [ExperienceID] [int] IDENTITY(1,1) NOT NULL,
-    [InterViewID] [int] NULL,
-    [CompanyName] [nvarchar](250) NULL,
-    [Experience] [decimal](18, 2) NULL,
-    [Salary] [decimal](18, 2) NULL,
-    CONSTRAINT [PK_InterviewExperienceEntry] PRIMARY KEY CLUSTERED ([ExperienceID] ASC)
-   ) ON [PRIMARY];
-  END
-
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'InterviewAddress')
-  BEGIN
-   CREATE TABLE [dbo].[InterviewAddress](
-    [InterviewAddressID] [int] IDENTITY(1,1) NOT NULL,
-    [InterviewID] [int] NOT NULL,
-    [ContactPersonName] [nvarchar](150) NULL,
-    [Careof] [nvarchar](50) NULL,
-    [CareOfName] [nvarchar](150) NULL,
-    [DoorNo] [nvarchar](150) NULL,
-    [Address1] [nvarchar](500) NULL,
-    [Address2] [nvarchar](500) NULL,
-    [AddressType] [nvarchar](50) NULL,
-    [LandMark] [nvarchar](500) NULL,
-    [CurrentLocation] [nvarchar](500) NULL,
-    [PermanentLocation] [nvarchar](500) NULL,
-    [CurrentAddress] [nvarchar](max) NULL,
-    [Village] [nvarchar](50) NULL,
-    [Town] [nvarchar](50) NULL,
-    [District] [nvarchar](50) NULL,
-    [State] [nvarchar](50) NULL,
-    [Country] [nvarchar](50) NULL,
-    [PinCode] [nvarchar](50) NULL,
-    [ContactNo] [nvarchar](50) NULL,
-    [Remarks] [nvarchar](500) NULL,
-    CONSTRAINT [PK__Intervie__687C1EE805C3D225] PRIMARY KEY CLUSTERED ([InterviewAddressID] ASC)
-   ) ON [PRIMARY];
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_interview_tables")
+  .execute("sp_webapi");
 }
 
 async function ensureVisitorTables(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'VisitorEntry')
-  BEGIN
-   CREATE TABLE [dbo].[VisitorEntry](
-    [VisitorID] [int] IDENTITY(1,1) NOT NULL,
-    [VisitorCode] [nvarchar](50) NULL,
-    [VisitDate] [datetime] NULL,
-    [VisitorName] [nvarchar](150) NULL,
-    [VisitorCompanyName] [nvarchar](150) NULL,
-    [ContactNumber] [nvarchar](50) NULL,
-    [Empcode] [nvarchar](50) NULL,
-    [EmpName] [nvarchar](150) NULL,
-    [Department] [nvarchar](50) NULL,
-    [Purpose] [bit] NULL,
-    [PurposeRegarding] [nvarchar](max) NULL,
-    [AppointmentType] [bit] NULL,
-    [AppointmentDate] [datetime] NULL,
-    [VechileNumber] [nvarchar](50) NULL,
-    [EmailID] [nvarchar](50) NULL,
-    [ConformationRequired] [bit] NULL,
-    [CoVisitor1] [nvarchar](50) NULL,
-    [CoVisitor2] [nvarchar](50) NULL,
-    [IdProof] [nvarchar](50) NULL,
-    [IDProofNumber] [nvarchar](150) NULL,
-    [MaterialsCarrying] [nvarchar](50) NULL,
-    [IsReturnableMaterial] [bit] NULL,
-    [ReturnableMaterialDescription] [nvarchar](max) NULL,
-    CONSTRAINT [PK_VisitorEntry] PRIMARY KEY CLUSTERED ([VisitorID] ASC)
-   ) ON [PRIMARY];
-   CREATE INDEX idx_visitor_empcode ON [dbo].[VisitorEntry] ([Empcode]);
-   CREATE INDEX idx_visitor_date ON [dbo].[VisitorEntry] ([VisitDate]);
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_visitor_tables")
+  .execute("sp_webapi");
 }
 
 async function ensureCompanyDocumentPathTable(){
  const dbPool=await getPool();
- await dbPool.request().query(`
-  IF NOT EXISTS (SELECT 1 FROM sys.tables WHERE name = 'DocumentPathCompany')
-  BEGIN
-   CREATE TABLE [dbo].[DocumentPathCompany] (
-    [documentpath] NVARCHAR(MAX) NOT NULL
-   );
-   INSERT INTO [dbo].[DocumentPathCompany] ([documentpath]) VALUES ('z:\\HRMS COMPANY DOCUMENTS\\');
-  END
- `);
+ await dbPool.request()
+  .input("operation", sql.NVarChar(50), "ensure_company_document_path_table")
+  .execute("sp_webapi");
 }
 
 async function getCompanyDocumentDirectory(){
  await ensureCompanyDocumentPathTable();
  const dbPool=await getPool();
- const result=await dbPool.request().query(`SELECT TOP 1 [documentpath] AS DocumentPath FROM [dbo].[DocumentPathCompany]`);
+ const result=await dbPool.request()
+  .input("operation", sql.NVarChar(50), "get_company_document_directory")
+  .execute("sp_webapi");
  const documentPath=result.recordset[0]?.DocumentPath || DEFAULT_DOCUMENT_PATH;
  const normalizedPath=String(documentPath || DEFAULT_DOCUMENT_PATH).replace(/[\\/]+$/, "") || DEFAULT_DOCUMENT_PATH;
  if(!fs.existsSync(normalizedPath)){
@@ -637,7 +336,11 @@ async function employeeExists(empcode){
 async function countEmployeeStatus(tableName, statusColumn, statusValue) {
  const dbPool = await getPool();
  const result = await dbPool.request()
-  .query(`SELECT COUNT(*) AS status_count FROM [dbo].[${tableName}] WHERE [${statusColumn}] = ${statusValue}`);
+  .input("operation", sql.NVarChar(50), "count_employee_status")
+  .input("table_name", sql.NVarChar(128), String(tableName || ""))
+  .input("status_column", sql.NVarChar(128), String(statusColumn || ""))
+  .input("status_value", sql.NVarChar(50), String(statusValue ?? ""))
+  .execute("sp_webapi");
  return Number(result.recordset?.[0]?.status_count || 0);
 }
 
@@ -650,7 +353,10 @@ async function countActiveEmployees() {
   for (const columnName of candidateColumns) {
    try {
     const result = await dbPool.request()
-     .query(`SELECT COUNT(*) AS total_employees FROM [dbo].[${tableName}] WHERE [${columnName}] = 1`);
+     .input("operation", sql.NVarChar(50), "count_active_employees")
+     .input("table_name", sql.NVarChar(128), String(tableName || ""))
+     .input("column_name", sql.NVarChar(128), String(columnName || ""))
+     .execute("sp_webapi");
     const count = Number(result.recordset?.[0]?.total_employees || 0);
     if (count > 0 || (tableName === candidateTables[candidateTables.length - 1] && columnName === candidateColumns[candidateColumns.length - 1])) {
      return count;
@@ -662,7 +368,11 @@ async function countActiveEmployees() {
  }
 
  try {
-  const fallbackResult = await dbPool.request().query(`SELECT COUNT(*) AS total_employees FROM [dbo].[Employee]`);
+  const fallbackResult = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "count_active_employees")
+   .input("table_name", sql.NVarChar(128), "Employee")
+   .input("column_name", sql.NVarChar(128), "EmpStatus")
+   .execute("sp_webapi");
   return Number(fallbackResult.recordset?.[0]?.total_employees || 0);
  } catch (error) {
   return 0;
@@ -682,23 +392,25 @@ async function getDashboardSummary(){
 
  try {
   const geofenceCountResult = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "count_geofence_checkins")
    .input("startDate", sql.DateTime, startOfDay)
    .input("endDate", sql.DateTime, endOfDay)
-   .query(`SELECT COUNT(*) AS geofence_checkins
-     FROM [dbo].[AttendanceGeofence]
-     WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate`);
+   .execute("sp_webapi");
 
   const fieldVisitResult = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "count_field_visits")
    .input("startDate", sql.DateTime, startOfDay)
    .input("endDate", sql.DateTime, endOfDay)
-   .query(`SELECT COUNT(DISTINCT [empcode]) AS field_visits
-     FROM [dbo].[AttendanceGeofence]
-     WHERE [attendancedate] >= @startDate AND [attendancedate] < @endDate AND LEN(ISNULL([empcode], '')) > 0`);
+   .execute("sp_webapi");
 
-  const leaveCountResult = await dbPool.request().query(`SELECT COUNT(*) AS leave_count FROM [dbo].[LeaveLog]`);
+  const leaveCountResult = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "count_leave_entries")
+   .execute("sp_webapi");
 
   try {
-   const visitorCountResult = await dbPool.request().query(`SELECT COUNT(*) AS visitor_count FROM [dbo].[VisitorEntry]`);
+   const visitorCountResult = await dbPool.request()
+    .input("operation", sql.NVarChar(50), "count_visitor_entries")
+    .execute("sp_webapi");
    visitorCount = Number(visitorCountResult.recordset?.[0]?.visitor_count || 0);
   } catch (error) {
    visitorCount = 0;
@@ -706,10 +418,11 @@ async function getDashboardSummary(){
 
   try {
    const interviewTodayResult = await dbPool.request()
+    .input("operation", sql.NVarChar(50), "count_interviews_today")
     .input("startDate", sql.DateTime, startOfDay)
     .input("endDate", sql.DateTime, endOfDay)
-    .query(`SELECT COUNT(*) AS interview_today_count FROM [dbo].[InterviewEntry] WHERE [InterviewDate] >= @startDate AND [InterviewDate] < @endDate`);
-   interviewTodayCount = Number(interviewTodayResult.recordset?.[0]?.interview_today_count || 0);
+    .execute("sp_webapi");
+   interviewTodayCount = Number(interviewTodayResult.recordset?.[0]?.interview_count || 0);
   } catch (error) {
    interviewTodayCount = 0;
   }
@@ -773,89 +486,129 @@ async function getEmployeeDetails(empcode){
   return null;
  }
 
- const candidateTables=["Employee","employee"];
- for(const tableName of candidateTables){
-  try{
-   let result;
-   try {
-    result = await dbPool.request()
-     .input("empcode", sql.NVarChar(50), normalizedEmpCode)
-     .query(`SELECT TOP 1 [EmpCode] AS empcode, [EmpName] AS empname, [UserName] AS username FROM [dbo].[${tableName}] WHERE [EmpCode] = @empcode`);
-   } catch (innerErr) {
-    if (innerErr && /Invalid column name 'UserName'|Invalid column name \[UserName\]/i.test(innerErr.message)) {
-     result = await dbPool.request()
-      .input("empcode", sql.NVarChar(50), normalizedEmpCode)
-      .query(`SELECT TOP 1 [EmpCode] AS empcode, [EmpName] AS empname FROM [dbo].[${tableName}] WHERE [EmpCode] = @empcode`);
-    } else {
-     throw innerErr;
-    }
-   }
+ try {
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_employee_details")
+   .input("empcode", sql.NVarChar(50), normalizedEmpCode)
+   .execute("sp_webapi");
 
-   if(!result.recordset.length){
-    continue;
-   }
-
-   const row=result.recordset[0];
-   const employeeNameValue = row.empname ? String(row.empname).trim() : "";
-   const fallbackName = row.username ? String(row.username).trim() : String(row.empcode || "").trim();
-
-   return {
-    empcode: row.empcode,
-    empname: employeeNameValue || fallbackName || null,
-    username: row.username,
-   };
-  }catch(err){
-   console.warn("getEmployeeDetails failed for table", tableName, err.message);
+  const row = result.recordset?.[0];
+  if (!row) {
+   return null;
   }
- }
 
- return null;
+  const employeeNameValue = row.empname ? String(row.empname).trim() : "";
+  const fallbackName = row.username ? String(row.username).trim() : String(row.empcode || "").trim();
+
+  return {
+   empcode: row.empcode,
+   empname: employeeNameValue || fallbackName || null,
+   username: row.username,
+  };
+ } catch (err) {
+  console.warn("getEmployeeDetails failed via sp_webapi:", err.message);
+  return null;
+ }
 }
 
-async function authenticateUser(username,password){
+async function getCompanyProfileByCode(companyCode) {
+  const normalizedCompanyCode = String(companyCode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
+  const dbPool = await getPool();
+
+  const companiesResult = await dbPool.request()
+    .input("operation", sql.NVarChar(50), "get_companies")
+    .execute("sp_webapi");
+
+  const company = (companiesResult.recordset || []).find((item) => {
+    const currentCode = String(item.companycode || item.CompanyCode || item.COMPANYCODE || "").trim();
+    return currentCode === normalizedCompanyCode;
+  });
+
+  if (company) {
+    return {
+      companycode: String(company.companycode || company.CompanyCode || company.COMPANYCODE || normalizedCompanyCode).trim() || normalizedCompanyCode,
+      companyname: String(company.companyname || company.CompanyName || company.COMPANYNAME || "Company").trim() || "Company",
+    };
+  }
+
+  return {
+    companycode: normalizedCompanyCode,
+    companyname: "Company",
+  };
+}
+
+async function authenticateUser(username,password,companyCode=DEFAULT_COMPANY_CODE){
  const normalizedUsername=String(username || "").trim();
  const normalizedPassword=String(password || "");
+ const normalizedCompanyCode = String(companyCode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
 
- if(normalizedUsername === "admin" && normalizedPassword === "123456"){
-  return { username: normalizedUsername, userType: "admin", empname: "Admin" };
+ if(normalizedUsername === "admin" && normalizedPassword === "admin@123!"){
+  return { username: normalizedUsername, userType: "admin", empname: "Admin", empcode: "10001", companycode: normalizedCompanyCode };
  }
 
  const dbPool=await getPool();
- const result=await dbPool.request()
-  .input("operation", sql.NVarChar(50), "authenticate_user")
-  .input("username", sql.NVarChar(100), normalizedUsername)
-  .input("password", sql.NVarChar(100), normalizedPassword)
-  .execute("sp_webapi");
- const row = result.recordset[0];
- // Helpful debug: show what the stored-proc returned for diagnosis
- console.debug && console.debug('authenticate_user result:', result.recordset && result.recordset.length ? result.recordset : []);
- if(!row?.username){
-  return null;
- }
- const userType = row.usertype || 'employee';
- const user = { username: row.username, userType };
- if(userType === "employee"){
-  if(row.empname){
+
+ try {
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "authenticate_user")
+   .input("username", sql.NVarChar(100), normalizedUsername)
+   .input("password", sql.NVarChar(100), normalizedPassword)
+   .execute("sp_webapi");
+
+  const row = result.recordset?.[0];
+  if(!row?.username){
+   return null;
+  }
+
+  const userType = String(row.usertype || "employee").toLowerCase();
+  const user = {
+   username: String(row.username || normalizedUsername).trim(),
+   userType,
+   empcode: String(row.empcode || row.employeecode || row.username || "").trim(),
+   companycode: normalizedCompanyCode,
+  };
+
+  if (row.empname) {
    user.empname = row.empname;
-  } else {
-   const employeeDetails = await getEmployeeDetails(row.username);
-   if(employeeDetails?.empname){
-    user.empname = employeeDetails.empname;
+  } else if (userType === "employee") {
+   const employeeDetails = await getEmployeeDetails(user.empcode || user.username);
+   if (employeeDetails?.empname) {
+     user.empname = employeeDetails.empname;
    }
   }
+
+  return user;
+ } catch (error) {
+  console.error("Stored procedure auth failed:", error);
+  return null;
  }
- return user;
 }
 
-async function detectUserType(username,password,dbPool){
- const adminResult=await dbPool.request()
-  .input("username", sql.NVarChar(100), username)
-  .input("password", sql.NVarChar(100), password)
-  .query(`SELECT TOP 1 1 AS isAdmin FROM [dbo].[usermaster] WHERE [username]=@username AND [password]=@password UNION SELECT TOP 1 1 AS isAdmin FROM [dbo].[UserMaster] WHERE [username]=@username AND [password]=@password`);
- if(adminResult.recordset.length){
-  return "admin";
- }
- return "employee";
+async function detectUserType(username, password, dbPool) {
+  const normalizedUsername = String(username || "").trim();
+  const normalizedPassword = String(password || "");
+
+  if (!normalizedUsername) {
+    return "employee";
+  }
+
+  try {
+    const result = await dbPool.request()
+      .input("operation", sql.NVarChar(50), "authenticate_user")
+      .input("username", sql.NVarChar(100), normalizedUsername)
+      .input("password", sql.NVarChar(100), normalizedPassword)
+      .execute("sp_webapi");
+
+    const row = result.recordset?.[0];
+    if (!row) {
+      return "employee";
+    }
+
+    return userType === "admin" ? "admin" : "employee";
+  } catch (error) {
+    console.warn("detectUserType failed via sp_webapi:", error.message);
+    return "employee";
+  }
 }
 
 /**
@@ -876,20 +629,26 @@ async function detectUserType(username,password,dbPool){
  *       200: {description: OK}
  */
 app.post("/login",async(req,res)=>{
- const {username,password}=req.body;
+ const {username,password,companycode} = req.body || {};
  try{
-  const user=await authenticateUser(username,password);
+  const resolvedCompanyCode = String(companycode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
+  const user = await authenticateUser(username, password, resolvedCompanyCode);
   if(user){
-   const companycode = String(req.body.companycode || "01").trim() || "01";
-   const accessToken=createAccessToken(user,companycode);
-   const refreshToken=createRefreshToken(user,companycode);
+   const companyInfo = await getCompanyProfileByCode(user.companycode || resolvedCompanyCode);
+   const accessToken = createAccessToken(user, user.companycode || resolvedCompanyCode);
+   const refreshToken = createRefreshToken(user, user.companycode || resolvedCompanyCode);
    return res.json({
-    token:accessToken,
+    token: accessToken,
     refreshToken,
-    username:user.username,
-    companycode,
-    userType:user.userType,
-    empName:user.empname || null,
+    username: user.username,
+    companycode: user.companycode || resolvedCompanyCode,
+    companyName: companyInfo.companyname,
+    companyname: companyInfo.companyname,
+    userType: user.userType,
+    empName: user.empname || null,
+    empName: user.empname || null,
+    empCode: user.empcode || user.empCode || null,
+    empcode: user.empcode || user.empCode || null,
    });
   }
   res.status(401).json({message:"User name or Password invalid"});
@@ -922,7 +681,7 @@ app.post("/refresh-token",(req,res)=>{
  }
  try{
   const payload=jwt.verify(refreshToken,REFRESH_TOKEN_SECRET);
-  const companycode=String(payload.companycode || "01").trim() || "01";
+  const companycode=String(payload.companycode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
   const accessToken=createAccessToken({username:payload.username, userType:payload.userType || "employee"}, companycode);
   const nextRefreshToken=createRefreshToken({username:payload.username, userType:payload.userType || "employee"}, companycode);
   return res.json({
@@ -976,7 +735,9 @@ app.get("/interviews", async (req, res) => {
  try {
   await ensureInterviewTables();
   const dbPool = await getPool();
-  const result = await dbPool.request().query(`SELECT TOP 20 * FROM [dbo].[InterviewEntry] ORDER BY [InterviewID] DESC`);
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_recent_interviews")
+   .execute("sp_webapi");
   return res.json(result.recordset || []);
  } catch (err) {
   console.error("Interview fetch failed:", err);
@@ -988,7 +749,9 @@ app.get("/visitors", async (req, res) => {
  try {
   await ensureVisitorTables();
   const dbPool = await getPool();
-  const result = await dbPool.request().query(`SELECT TOP 50 * FROM [dbo].[VisitorEntry] ORDER BY [VisitorID] DESC`);
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_recent_visitors")
+   .execute("sp_webapi");
   return res.json(result.recordset || []);
  } catch (err) {
   console.error("Visitor fetch failed:", err);
@@ -1000,7 +763,6 @@ app.post("/visitors", async (req, res) => {
  try {
   await ensureVisitorTables();
   const visitor = req.body || {};
-  
   const visitorCode = String(visitor.VisitorCode || "").trim();
   const visitorName = String(visitor.VisitorName || "").trim();
   if (!visitorCode || !visitorName) {
@@ -1009,6 +771,7 @@ app.post("/visitors", async (req, res) => {
 
   const dbPool = await getPool();
   const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "save_visitor")
    .input("VisitorCode", sql.NVarChar(50), visitorCode)
    .input("VisitDate", sql.DateTime, visitor.VisitDate ? new Date(visitor.VisitDate) : null)
    .input("VisitorName", sql.NVarChar(150), visitorName)
@@ -1031,11 +794,8 @@ app.post("/visitors", async (req, res) => {
    .input("MaterialsCarrying", sql.NVarChar(50), visitor.MaterialsCarrying || null)
    .input("IsReturnableMaterial", sql.Bit, Boolean(visitor.IsReturnableMaterial))
    .input("ReturnableMaterialDescription", sql.NVarChar(sql.MAX), visitor.ReturnableMaterialDescription || null)
-   .query(`INSERT INTO [dbo].[VisitorEntry]
-    ([VisitorCode],[VisitDate],[VisitorName],[VisitorCompanyName],[ContactNumber],[Empcode],[EmpName],[Department],[Purpose],[PurposeRegarding],[AppointmentType],[AppointmentDate],[VechileNumber],[EmailID],[ConformationRequired],[CoVisitor1],[CoVisitor2],[IdProof],[IDProofNumber],[MaterialsCarrying],[IsReturnableMaterial],[ReturnableMaterialDescription])
-    OUTPUT INSERTED.[VisitorID]
-    VALUES (@VisitorCode,@VisitDate,@VisitorName,@VisitorCompanyName,@ContactNumber,@Empcode,@EmpName,@Department,@Purpose,@PurposeRegarding,@AppointmentType,@AppointmentDate,@VechileNumber,@EmailID,@ConformationRequired,@CoVisitor1,@CoVisitor2,@IdProof,@IDProofNumber,@MaterialsCarrying,@IsReturnableMaterial,@ReturnableMaterialDescription)`);
-  
+   .execute("sp_webapi");
+
   return res.status(201).json({ message: "Visitor saved successfully", visitorId: result.recordset?.[0]?.VisitorID || null });
  } catch (err) {
   console.error("Visitor save failed:", err);
@@ -1065,8 +825,9 @@ app.post("/interviews", async (req, res) => {
 
   try {
    const insertInterview = await transaction.request()
+    .input("operation", sql.NVarChar(50), "insert_interview_entry")
     .input("InterviewCode", sql.NVarChar(50), interviewCode)
-    .input("CompanyCode", sql.NVarChar(50), String(interview.CompanyCode || "01"))
+    .input("CompanyCode", sql.NVarChar(50), String(interview.CompanyCode || DEFAULT_COMPANY_CODE))
     .input("InterviewDate", sql.DateTime, interview.InterviewDate ? new Date(interview.InterviewDate) : null)
     .input("CandidateName", sql.NVarChar(50), candidateName)
     .input("Gender", sql.NVarChar(50), interview.Gender || null)
@@ -1092,10 +853,7 @@ app.post("/interviews", async (req, res) => {
     .input("NoticePeriod", sql.Decimal(18, 2), interview.NoticePeriod !== "" && interview.NoticePeriod !== null && interview.NoticePeriod !== undefined ? Number(interview.NoticePeriod) : null)
     .input("NoticePeriodNegotiable", sql.Bit, Boolean(interview.NoticePeriodNegotiable))
     .input("ExpectedJoiningDate", sql.DateTime, interview.ExpectedJoiningDate ? new Date(interview.ExpectedJoiningDate) : null)
-    .query(`INSERT INTO [dbo].[InterviewEntry]
-      ([InterviewCode],[CompanyCode],[InterviewDate],[CandidateName],[Gender],[Age],[MaritialStatus],[ContactNumber],[ContactNumber1],[EmailID],[Address],[PermanentLocation],[PresentLocation],[HighestQualification],[PreviousDesignation],[PostingApplyingFor],[Category],[RefferedBy],[ReasontoReleave],[Remarks],[TotalExperience],[CurrentCTC],[ExpectedCTC],[ExpectedCTCNegotiable],[NoticePeriod],[NoticePeriodNegotiable],[ExpectedJoiningDate])
-      OUTPUT INSERTED.[InterviewID]
-      VALUES (@InterviewCode,@CompanyCode,@InterviewDate,@CandidateName,@Gender,@Age,@MaritialStatus,@ContactNumber,@ContactNumber1,@EmailID,@Address,@PermanentLocation,@PresentLocation,@HighestQualification,@PreviousDesignation,@PostingApplyingFor,@Category,@RefferedBy,@ReasontoReleave,@Remarks,@TotalExperience,@CurrentCTC,@ExpectedCTC,@ExpectedCTCNegotiable,@NoticePeriod,@NoticePeriodNegotiable,@ExpectedJoiningDate)`);
+    .execute("sp_webapi");
 
    const interviewId = insertInterview.recordset?.[0]?.InterviewID;
 
@@ -1103,33 +861,37 @@ app.post("/interviews", async (req, res) => {
     for (const skill of skills) {
       if (!skill || (!skill.SkillName && skill.Experience === "" && skill.Experience === undefined && skill.Experience === null)) continue;
       await transaction.request()
+       .input("operation", sql.NVarChar(50), "insert_interview_skill")
        .input("InterviewID", sql.Int, Number(interviewId))
        .input("SkillName", sql.NVarChar(150), skill.SkillName || null)
        .input("Experience", sql.Decimal(18, 2), skill.Experience !== "" && skill.Experience !== null && skill.Experience !== undefined ? Number(skill.Experience) : null)
-       .query(`INSERT INTO [dbo].[InterviewSkillEntry] ([InterviewID],[SkillName],[Experience]) VALUES (@InterviewID,@SkillName,@Experience)`);
+       .execute("sp_webapi");
     }
 
     for (const relation of relations) {
       if (!relation || (!relation.RelationName && !relation.Relationship && !relation.Age)) continue;
       await transaction.request()
+       .input("operation", sql.NVarChar(50), "insert_interview_relation")
        .input("InterviewID", sql.Int, Number(interviewId))
        .input("RelationName", sql.NVarChar(150), relation.RelationName || null)
        .input("Relationship", sql.NVarChar(150), relation.Relationship || null)
        .input("Age", sql.Int, relation.Age !== "" && relation.Age !== null && relation.Age !== undefined ? Number(relation.Age) : null)
-       .query(`INSERT INTO [dbo].[InterviewRelationEntry] ([InterviewID],[RelationName],[Relationship],[Age]) VALUES (@InterviewID,@RelationName,@Relationship,@Age)`);
+       .execute("sp_webapi");
     }
 
     for (const slot of timeSlots) {
       if (!slot || (!slot.InterviewDateTime && !slot.notes)) continue;
       await transaction.request()
+       .input("operation", sql.NVarChar(50), "insert_interview_time")
        .input("InterviewID", sql.Int, Number(interviewId))
        .input("InterviewDateTime", sql.DateTime, slot.InterviewDateTime ? new Date(slot.InterviewDateTime) : null)
        .input("notes", sql.NVarChar(sql.MAX), slot.notes || null)
-       .query(`INSERT INTO [dbo].[InterviewTimeEntry] ([InterviewID],[InterviewDateTime],[notes]) VALUES (@InterviewID,@InterviewDateTime,@notes)`);
+       .execute("sp_webapi");
     }
 
     if (finalEntry && Object.keys(finalEntry).some((key) => String(finalEntry[key] ?? "") !== "")) {
       await transaction.request()
+       .input("operation", sql.NVarChar(50), "insert_interview_final")
        .input("InterviewID", sql.Int, Number(interviewId))
        .input("IDProof", sql.NVarChar(50), finalEntry.IDProof || null)
        .input("IDProofNumber", sql.NVarChar(50), finalEntry.IDProofNumber || null)
@@ -1139,7 +901,7 @@ app.post("/interviews", async (req, res) => {
        .input("Notes", sql.NVarChar(sql.MAX), finalEntry.Notes || null)
        .input("JoiningDate", sql.DateTime, finalEntry.JoiningDate ? new Date(finalEntry.JoiningDate) : null)
        .input("FixedCTC", sql.Int, finalEntry.FixedCTC !== "" && finalEntry.FixedCTC !== null && finalEntry.FixedCTC !== undefined ? Number(finalEntry.FixedCTC) : null)
-       .query(`INSERT INTO [dbo].[InterviewFinalEntry] ([InterviewID],[IDProof],[IDProofNumber],[FinalRoundStatus],[FinalRoundScore],[InterviewStatus],[Notes],[JoiningDate],[FixedCTC]) VALUES (@InterviewID,@IDProof,@IDProofNumber,@FinalRoundStatus,@FinalRoundScore,@InterviewStatus,@Notes,@JoiningDate,@FixedCTC)`);
+       .execute("sp_webapi");
     }
    }
 
@@ -1163,30 +925,12 @@ app.get("/leave-entries", async (req, res) => {
   const requestUser = req.user || {};
   const isAdmin = String(requestUser.userType || "").toLowerCase() === "admin";
 
-  let query = `SELECT [LeaveLogID], [CompanyCode], [EmpCode], [FromDate], [ToDate], [Information], [Description], [isApproved], [IsCancel]
-    FROM [dbo].[LeaveLog]`;
-  const params = [];
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_leave_entries")
+   .input("empCode", sql.NVarChar(50), isAdmin ? null : (empCode || req.user?.username || ""))
+   .input("isAdmin", sql.Bit, isAdmin)
+   .execute("sp_webapi");
 
-  if (!isAdmin && empCode) {
-    query += ` WHERE [EmpCode] = @empCode`;
-    params.push({ name: "empCode", type: sql.NVarChar(50), value: empCode });
-  }
-
-  if (isAdmin) {
-    query += ` ORDER BY [LeaveLogID] DESC`;
-  } else if (empCode) {
-    query += ` ORDER BY [FromDate] DESC`;
-  } else {
-    query += ` WHERE [EmpCode] = @empCode ORDER BY [FromDate] DESC`;
-    params.push({ name: "empCode", type: sql.NVarChar(50), value: req.user?.username || "" });
-  }
-
-  const request = dbPool.request();
-  for (const param of params) {
-    request.input(param.name, param.type, param.value);
-  }
-
-  const result = await request.query(query);
   return res.json(result.recordset || []);
  } catch (err) {
   console.error("Leave entries fetch failed:", err);
@@ -1198,7 +942,7 @@ app.post("/leave-entries", async (req, res) => {
  try {
   await ensureLeaveLogTable();
   const { companyCode, empCode, fromDate, toDate, information, description } = req.body || {};
-  const normalizedCompanyCode = String(companyCode || "01").trim() || "01";
+  const normalizedCompanyCode = String(companyCode || DEFAULT_COMPANY_CODE).trim() || "01";
   const normalizedEmpCode = String(empCode || req.user?.username || "").trim();
   const normalizedInfo = String(information || "").trim();
 
@@ -1217,18 +961,18 @@ app.post("/leave-entries", async (req, res) => {
 
   const dbPool = await getPool();
   const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "save_leave_entry")
    .input("companyCode", sql.NVarChar(50), normalizedCompanyCode)
    .input("empCode", sql.NVarChar(50), normalizedEmpCode)
    .input("fromDate", sql.DateTime, startDate)
    .input("toDate", sql.DateTime, endDate)
    .input("information", sql.NVarChar(50), normalizedInfo)
    .input("description", sql.NVarChar(500), String(description || ""))
-   .query(`INSERT INTO [dbo].[LeaveLog] ([CompanyCode],[EmpCode],[FromDate],[ToDate],[Information],[Description],[isApproved],[IsCancel])
-    VALUES (@companyCode,@empCode,@fromDate,@toDate,@information,@description,0,0)`);
+   .execute("sp_webapi");
 
   return res.status(201).json({
     message: "Leave request added successfully",
-    leaveLogId: result && result.recordset && result.recordset[0] ? result.recordset[0].LeaveLogID : null,
+    leaveLogId: result.recordset?.[0]?.LeaveLogID || null,
   });
  } catch (err) {
   console.error("Leave entry insert failed:", err);
@@ -1248,12 +992,10 @@ app.patch("/leave-entries/:leaveLogId/approve", async (req, res) => {
 
   const dbPool = await getPool();
   await dbPool.request()
+   .input("operation", sql.NVarChar(50), "approve_leave_entry")
    .input("leaveLogId", sql.Int, leaveLogId)
    .input("isApproved", sql.Bit, Boolean(isApproved))
-   .query(`UPDATE [dbo].[LeaveLog]
-    SET [isApproved] = @isApproved,
-        [IsCancel] = CASE WHEN @isApproved = 0 THEN 1 ELSE 0 END
-    WHERE [LeaveLogID] = @leaveLogId`);
+   .execute("sp_webapi");
 
   return res.json({ message: "Leave status updated successfully" });
  } catch (err) {
@@ -1418,7 +1160,7 @@ app.get("/employees/:empcode",async(req,res)=>{
 app.post("/forSignature",async(req,res)=>{
  try{
   const {empcode,companycode,description,signatureBase64}=req.body || {};
-  const resolvedCompanyCode=String(companycode || "01").trim() || "01";
+  const resolvedCompanyCode=String(companycode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
   const safeEmpCode=String(empcode || "").trim();
   const safeDescription=String(description || "").trim();
 
@@ -1437,30 +1179,13 @@ app.post("/forSignature",async(req,res)=>{
   const normalizedSignature=String(signatureBase64 || "").replace(/^data:image\/\w+;base64,/, "");
   const signatureBuffer=Buffer.from(normalizedSignature, "base64");
 
-  const existingSignature=await dbPool.request()
+  await dbPool.request()
+   .input("operation", sql.NVarChar(50), "upsert_emp_signature")
+   .input("companycode", sql.NVarChar(50), resolvedCompanyCode)
    .input("empcode", sql.NVarChar(50), safeEmpCode)
-   .query(`SELECT TOP 1 1 AS existsRow FROM [dbo].[empsignature] WHERE [empcode] = @empcode`);
-
-  if(existingSignature.recordset[0]?.existsRow){
-   await dbPool.request()
-    .input("companycode", sql.NVarChar(50), resolvedCompanyCode)
-    .input("empcode", sql.NVarChar(50), safeEmpCode)
-    .input("signatureimage", sql.VarBinary(sql.MAX), signatureBuffer)
-    .input("description", sql.NVarChar(200), safeDescription)
-    .query(`UPDATE [dbo].[empsignature]
-      SET [companycode] = @companycode,
-          [signatureimage] = @signatureimage,
-          [description] = @description
-      WHERE [empcode] = @empcode`);
-  } else {
-   await dbPool.request()
-    .input("companycode", sql.NVarChar(50), resolvedCompanyCode)
-    .input("empcode", sql.NVarChar(50), safeEmpCode)
-    .input("signatureimage", sql.VarBinary(sql.MAX), signatureBuffer)
-    .input("description", sql.NVarChar(200), safeDescription)
-    .query(`INSERT INTO [dbo].[empsignature] ([companycode], [empcode], [signatureimage], [description])
-      VALUES (@companycode, @empcode, @signatureimage, @description)`);
-  }
+   .input("signatureimage", sql.VarBinary(sql.MAX), signatureBuffer)
+   .input("description", sql.NVarChar(200), safeDescription)
+   .execute("sp_webapi");
 
   res.json({
    message:"Employee signature saved successfully",
@@ -1484,9 +1209,9 @@ app.get("/forSignature/:empcode",async(req,res)=>{
   await ensureEmpSignatureTable();
   const dbPool=await getPool();
   const result=await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_emp_signature")
    .input("empcode", sql.NVarChar(50), safeEmpCode)
-   .query(`SELECT TOP 1 [companycode], [empcode], [signatureimage], [description]
-    FROM [dbo].[empsignature] WHERE [empcode] = @empcode`);
+   .execute("sp_webapi");
 
   if(!result.recordset.length){
    return res.status(404).json({message:"Signature not found"});
@@ -1516,8 +1241,9 @@ app.delete("/forSignature/:empcode",async(req,res)=>{
   await ensureEmpSignatureTable();
   const dbPool=await getPool();
   const result=await dbPool.request()
+   .input("operation", sql.NVarChar(50), "delete_emp_signature")
    .input("empcode", sql.NVarChar(50), safeEmpCode)
-   .query(`DELETE FROM [dbo].[empsignature] WHERE [empcode] = @empcode`);
+   .execute("sp_webapi");
 
   return res.json({
    message:"Employee signature deleted successfully",
@@ -1539,7 +1265,7 @@ app.post("/emp-image",upload.single("file"),async(req,res)=>{
   await ensureEmpImageTable();
 
   const {empcode,companycode,imagename,description}=req.body;
-  const resolvedCompanyCode=String(companycode || "01").trim() || "01";
+  const resolvedCompanyCode=String(companycode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
   const safeEmpCode=String(empcode || "").trim();
   const employeeFound=await employeeExists(safeEmpCode);
   if(!employeeFound){
@@ -1650,6 +1376,7 @@ app.post("/attendance-geofence",upload.single("selfie"),async(req,res)=>{
   const selfieImageBuffer = selfieBase64 ? Buffer.from(selfieBase64, "base64") : null;
 
   const result=await dbPool.request()
+   .input("operation",sql.NVarChar(50),"save_attendance_geofence")
    .input("companycode",sql.NVarChar(50),resolvedCompanyCode)
    .input("empcode",sql.NVarChar(50),safeEmpCode)
    .input("latitude",sql.Decimal(10,8),parseFloat(latitude))
@@ -1659,13 +1386,9 @@ app.post("/attendance-geofence",upload.single("selfie"),async(req,res)=>{
    .input("status",sql.NVarChar(20),status || "Present")
    .input("remarks",sql.NVarChar(500),remarks || "")
    .input("geofenceradius",sql.Decimal(10,2),Number.isFinite(parsedRadius) ? parsedRadius : null)
-   .query(`INSERT INTO [dbo].[AttendanceGeofence] (
-      [companycode], [empcode], [latitude], [longitude], [selfiimage], [selfieimage_base64], [status], [remarks], [geofenceradius]
-    )
-    OUTPUT INSERTED.[AttendanceID]
-    VALUES (@companycode, @empcode, @latitude, @longitude, @selfiimage, @selfieimage_base64, @status, @remarks, @geofenceradius)`);
+   .execute("sp_webapi");
 
-  if(fs.existsSync(req.file.path)){
+  if(req.file && fs.existsSync(req.file.path)){
    fs.unlinkSync(req.file.path);
   }
 
@@ -1692,6 +1415,143 @@ app.post("/attendance-geofence",upload.single("selfie"),async(req,res)=>{
  }
 });
 
+app.post("/field-executive/onsite", upload.fields([
+  { name: "employeeSelfie", maxCount: 1 },
+  { name: "clientSelfie", maxCount: 1 },
+  { name: "document", maxCount: 1 }
+]), async (req, res) => {
+ try {
+  const tokenUser = req.user || {};
+  const companyCode = String(req.body.companycode || tokenUser.companycode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
+  const employeeCode = String(req.body.employeeCode || req.body.empcode || "").trim();
+  const employeeName = String(req.body.employeeName || req.body.empname || "").trim();
+  const natureOfWork = String(req.body.natureOfWork || req.body.natureofwork || "").trim();
+  const visitType = String(req.body.visitType || req.body.visittype || "checkin").trim();
+  const clientName = String(req.body.clientName || req.body.clientname || "").trim();
+  const latitude = req.body.latitude;
+  const longitude = req.body.longitude;
+  const remarks = String(req.body.remarks || "").trim();
+  const accuracy = req.body.accuracy;
+  const visitDateTime = req.body.visitDateTime || req.body.visitdatetime || new Date().toISOString();
+
+  if (!employeeCode || !natureOfWork || !clientName) {
+   return res.status(400).json({ message: "Employee code, nature of work, and client name are required." });
+  }
+  if (!latitude || !longitude) {
+   return res.status(400).json({ message: "Latitude and longitude are required." });
+  }
+
+  const employeeSelfieFile = req.files?.employeeSelfie?.[0];
+  const clientSelfieFile = req.files?.clientSelfie?.[0];
+  const documentFile = req.files?.document?.[0];
+
+  const employeeSelfieSource = String(req.body.employeeSelfie || req.body.employeeSelfieBase64 || "").trim();
+  const clientSelfieSource = String(req.body.clientSelfie || req.body.clientSelfieBase64 || "").trim();
+
+  if (!employeeSelfieFile && !employeeSelfieSource) {
+   return res.status(400).json({ message: "Employee selfie is required." });
+  }
+  if (!clientSelfieFile && !clientSelfieSource) {
+   return res.status(400).json({ message: "Client selfie is required." });
+  }
+
+  const parseBase64Image = (base64Value) => {
+   if (!base64Value) return null;
+   const trimmed = String(base64Value).trim();
+   const match = trimmed.match(/^data:(image\/[a-zA-Z0-9.+-]+);base64,(.*)$/i);
+   const cleanBase64 = match ? match[2] : trimmed;
+   if (!cleanBase64) return null;
+   return Buffer.from(cleanBase64, "base64");
+  };
+
+  const employeeSelfieBuffer = employeeSelfieFile ? fs.readFileSync(employeeSelfieFile.path) : parseBase64Image(employeeSelfieSource);
+  const clientSelfieBuffer = clientSelfieFile ? fs.readFileSync(clientSelfieFile.path) : parseBase64Image(clientSelfieSource);
+  const documentBuffer = documentFile ? fs.readFileSync(documentFile.path) : null;
+  const documentName = documentFile ? documentFile.originalname : String(req.body.documentName || "").trim() || null;
+  const documentExtension = documentName ? path.extname(documentName).replace(".", "") : null;
+  const visitDate = Number.isNaN(Date.parse(visitDateTime)) ? new Date() : new Date(visitDateTime);
+
+  await ensureFieldExecutiveTable();
+  const dbPool = await getPool();
+  const result = await dbPool.request()
+   .input("companycode", sql.NVarChar(50), companyCode || DEFAULT_COMPANY_CODE)
+   .input("empcode", sql.NVarChar(50), employeeCode)
+   .input("empname", sql.NVarChar(200), employeeName || null)
+   .input("natureofwork", sql.NVarChar(250), natureOfWork)
+   .input("visitdatetime", sql.DateTime, visitDate)
+   .input("visittype", sql.NVarChar(20), visitType || "checkin")
+   .input("clientname", sql.NVarChar(200), clientName)
+   .input("latitude", sql.Decimal(10,8), parseFloat(latitude))
+   .input("longitude", sql.Decimal(11,8), parseFloat(longitude))
+   .input("accuracy", sql.Decimal(10,2), accuracy !== undefined && accuracy !== null && accuracy !== "" ? parseFloat(accuracy) : null)
+   .input("remarks", sql.NVarChar(sql.MAX), remarks || null)
+   .input("employeeselfie", sql.VarBinary(sql.MAX), employeeSelfieBuffer)
+   .input("employeeselfie_base64", sql.NVarChar(sql.MAX), employeeSelfieSource || null)
+   .input("clientselfie", sql.VarBinary(sql.MAX), clientSelfieBuffer)
+   .input("clientselfie_base64", sql.NVarChar(sql.MAX), clientSelfieSource || null)
+   .input("documentname", sql.NVarChar(200), documentName || null)
+   .input("documentextension", sql.NVarChar(50), documentExtension || null)
+   .input("documentcontent", sql.VarBinary(sql.MAX), documentBuffer)
+   .execute("sp_webapi");
+
+  if (employeeSelfieFile && fs.existsSync(employeeSelfieFile.path)) fs.unlinkSync(employeeSelfieFile.path);
+  if (clientSelfieFile && fs.existsSync(clientSelfieFile.path)) fs.unlinkSync(clientSelfieFile.path);
+  if (documentFile && fs.existsSync(documentFile.path)) fs.unlinkSync(documentFile.path);
+
+  return res.json({
+   message: "Field executive onsite entry saved successfully.",
+   visitId: result.recordset[0]?.VisitID,
+   empcode: employeeCode,
+   companycode: companyCode,
+   visitdatetime: visitDate.toISOString(),
+   visitType,
+   clientName,
+   latitude: parseFloat(latitude),
+   longitude: parseFloat(longitude)
+  });
+ } catch (error) {
+  console.error("Field executive save failed:", error);
+  return res.status(500).json({ message: "Field executive save failed", error: error.message });
+ }
+});
+
+app.get("/field-executive/list", async (req, res) => {
+ try {
+  await ensureFieldExecutiveTable();
+  const dbPool = await getPool();
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_field_executive_list")
+   .execute("sp_webapi");
+  return res.json({ message: "Field executive visits retrieved.", records: result.recordset || [] });
+ } catch (error) {
+  console.error("Field executive list failed:", error);
+  return res.status(500).json({ message: "Failed to load field executive records", error: error.message });
+ }
+});
+
+app.get("/field-executive/report", async (req, res) => {
+ try {
+  const fromDate = req.query.fromDate;
+  const toDate = req.query.toDate;
+  const location = String(req.query.location || "").trim();
+
+  await ensureFieldExecutiveTable();
+  const dbPool = await getPool();
+
+  const result = await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_field_executive_report")
+   .input("fromDate", sql.DateTime, fromDate ? new Date(fromDate) : null)
+   .input("toDate", sql.DateTime, toDate ? new Date(toDate) : null)
+   .input("location", sql.NVarChar(200), location ? `%${location}%` : null)
+   .execute("sp_webapi");
+
+  return res.json({ message: "Field executive report retrieved.", records: result.recordset || [] });
+ } catch (error) {
+  console.error("Field executive report failed:", error);
+  return res.status(500).json({ message: "Failed to get field executive report", error: error.message });
+ }
+});
+
 // Get Attendance History
 app.get("/attendance-history/:empcode",async(req,res)=>{
  try{
@@ -1705,12 +1565,9 @@ app.get("/attendance-history/:empcode",async(req,res)=>{
 
   const dbPool=await getPool();
   const result=await dbPool.request()
+   .input("operation",sql.NVarChar(50),"get_attendance_history")
    .input("empcode",sql.NVarChar(50),safeEmpCode)
-   .query(`SELECT TOP 5
-      [AttendanceID], [companycode], [empcode], [attendancedate], [latitude], [longitude], [status], [remarks], [geofenceradius]
-    FROM [dbo].[AttendanceGeofence]
-    WHERE [empcode] = @empcode
-    ORDER BY [attendancedate] DESC`);
+   .execute("sp_webapi");
 
   res.json({
    message:"Attendance history retrieved",
@@ -1825,7 +1682,7 @@ app.get("/download-document/:empcode/:documentname",async(req,res)=>{
   }
 
   const ext=result.recordset[0].documentextension || "bin";
-  const companyCode=result.recordset[0].companycode || "01";
+  const companyCode=result.recordset[0].companycode || DEFAULT_COMPANY_CODE;
   const docDir=await getDocumentDirectory();
   const documentFolder=buildDocumentFolderPath(docDir,documentname);
   const fileName=buildDocumentFilename(companyCode,empcode,ext);
@@ -1846,11 +1703,9 @@ app.get("/company-documents",async(req,res)=>{
  try{
   await ensureCompanyDocumentTable();
   const dbPool=await getPool();
-  const result=await dbPool.request().query(`
-   SELECT [DocumentID], [DocumentCode], [DocumentName], [DocumentExtension], [Status], [ExpiryDate], [RemainderOn]
-   FROM [dbo].[DocumentCompany]
-   ORDER BY [DocumentID] DESC
-  `);
+  const result=await dbPool.request()
+   .input("operation", sql.NVarChar(50), "get_company_documents")
+   .execute("sp_webapi");
   return res.json(result.recordset || []);
  }catch(err){
   console.error(err);
@@ -1867,7 +1722,7 @@ app.post("/company-documents",upload.single("file"),async(req,res)=>{
   await ensureCompanyDocumentTable();
   const {documentname,documentcode,companycode,status,expirydate,remainderon}=req.body;
   const safeName=String(documentname || "").trim();
-  let safeCode=String(documentcode || companycode || req.body?.companycode || req.user?.companycode || "").trim() || "01";
+  let safeCode=String(documentcode || companycode || req.body?.companycode || req.user?.companycode || DEFAULT_COMPANY_CODE).trim() || DEFAULT_COMPANY_CODE;
   if (/^\d$/.test(safeCode)) safeCode = safeCode.padStart(2, '0');
   const safeStatus=String(status || "true").toLowerCase() === "true";
   const safeExpiryDate=String(expirydate || "").trim();
@@ -1893,15 +1748,14 @@ app.post("/company-documents",upload.single("file"),async(req,res)=>{
   fs.unlinkSync(req.file.path);
 
   const insertResult=await dbPool.request()
+   .input("operation",sql.NVarChar(50),"insert_company_document")
    .input("documentcode",sql.NVarChar(50),safeCode || null)
    .input("documentname",sql.NVarChar(50),safeName)
    .input("documentextension",sql.NVarChar(50),ext || null)
    .input("status",sql.Bit,safeStatus)
    .input("expirydate",sql.DateTime, safeExpiryDate ? new Date(safeExpiryDate) : null)
    .input("remainderon",sql.DateTime, safeRemainderOn ? new Date(safeRemainderOn) : null)
-   .query(`INSERT INTO [dbo].[DocumentCompany] ([DocumentCode], [DocumentName], [DocumentExtension], [Status], [ExpiryDate], [RemainderOn])
-    OUTPUT INSERTED.[DocumentID]
-    VALUES (@documentcode, @documentname, @documentextension, @status, @expirydate, @remainderon)`);
+   .execute("sp_webapi");
 
   return res.json({
    message:"Company document uploaded successfully",
@@ -1927,13 +1781,14 @@ app.delete("/company-documents/:documentId",async(req,res)=>{
   await ensureCompanyDocumentTable();
   const dbPool=await getPool();
   const result=await dbPool.request()
+   .input("operation",sql.NVarChar(50),"get_company_document")
    .input("documentId",sql.Int,Number(documentId))
-   .query(`SELECT TOP 1 [DocumentID], [DocumentCode], [DocumentName], [DocumentExtension] FROM [dbo].[DocumentCompany] WHERE [DocumentID] = @documentId`);
+   .execute("sp_webapi");
   if(result.recordset.length===0){
    return res.status(404).json({message:"Company document not found"});
   }
 
-  const docCode=String(result.recordset[0].DocumentCode || "").trim() || "01";
+  const docCode=String(result.recordset[0].DocumentCode || "").trim() || DEFAULT_COMPANY_CODE;
   const docName=String(result.recordset[0].DocumentName || "").trim();
   const docExt=String(result.recordset[0].DocumentExtension || "").trim();
   if(docName){
@@ -1946,8 +1801,9 @@ app.delete("/company-documents/:documentId",async(req,res)=>{
   }
 
   await dbPool.request()
+   .input("operation",sql.NVarChar(50),"delete_company_document")
    .input("documentId",sql.Int,Number(documentId))
-   .query(`DELETE FROM [dbo].[DocumentCompany] WHERE [DocumentID] = @documentId`);
+   .execute("sp_webapi");
 
   return res.json({message:"Company document deleted successfully"});
  }catch(err){
@@ -1962,13 +1818,14 @@ app.get("/download-company-document/:documentId",async(req,res)=>{
   await ensureCompanyDocumentTable();
   const dbPool=await getPool();
   const result=await dbPool.request()
+   .input("operation",sql.NVarChar(50),"get_company_document")
    .input("documentId",sql.Int,Number(documentId))
-   .query(`SELECT TOP 1 [DocumentID], [DocumentCode], [DocumentName], [DocumentExtension] FROM [dbo].[DocumentCompany] WHERE [DocumentID] = @documentId`);
+   .execute("sp_webapi");
   if(result.recordset.length===0){
    return res.status(404).json({message:"Company document not found"});
   }
 
-  const docCode=String(result.recordset[0].DocumentCode || "").trim() || "01";
+  const docCode=String(result.recordset[0].DocumentCode || "").trim() || DEFAULT_COMPANY_CODE;
   const docName=String(result.recordset[0].DocumentName || "").trim();
   const docExt=String(result.recordset[0].DocumentExtension || "").trim();
   const docDir=await getCompanyDocumentDirectory();

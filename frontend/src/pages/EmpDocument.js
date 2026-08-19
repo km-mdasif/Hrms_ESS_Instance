@@ -65,10 +65,13 @@ export default function EmpDocument() {
       });
       if (response.ok) {
         const data = await response.json();
-        setDocumentTypes(data);
+        // Normalize response: handle both array and object responses
+        const normalizedData = Array.isArray(data) ? data : (data?.data || data?.result || []);
+        setDocumentTypes(normalizedData);
       }
     } catch (err) {
       console.error("Failed to fetch document types:", err);
+      setDocumentTypes([]);
     }
   };
 
@@ -121,7 +124,7 @@ export default function EmpDocument() {
         return;
       }
       const data = await response.json();
-      setEmployeeName(data?.empname || data?.username || employeeCode);
+      setEmployeeName(data?.empname || data?.username || "");
     } catch (err) {
       console.error("Failed to fetch employee name:", err);
       setEmployeeName("");
@@ -218,15 +221,26 @@ export default function EmpDocument() {
   };
 
   return (
-    <Box sx={{ p: 3, bgcolor: "#f5f7fb", minHeight: "100%" }}>
-      <Typography variant="h4" fontWeight={700} sx={{ mb: 3 }}>
-        Employee Document Checklist
-      </Typography>
+    <Box sx={{ display: "grid", gap: 3 }}>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 3 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={2} alignItems={{ xs: "flex-start", sm: "center" }}>
+            <Box>
+              <Typography variant="h5" fontWeight={800}>Employee Document Checklist</Typography>
+              <Typography variant="body2" sx={{ opacity: 0.9 }}>Upload and verify required employee documents</Typography>
+            </Box>
+            <Stack direction="row" spacing={1}>
+              <Chip label="Documents" sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }} />
+            </Stack>
+          </Stack>
+        </Box>
+      </Card>
 
-      <Card sx={{ mb: 3 }}>
-        <CardContent>
-          <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "flex-end" }}>
-            <Box sx={{ display: "grid", gap: 2, width: "100%", maxWidth: 520 }}>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <CardContent sx={{ p: 3 }}>
+          <Stack spacing={2}>
+            <Stack direction={{ xs: "column", md: "row" }} spacing={2} alignItems={{ xs: "stretch", md: "flex-end" }}>
+              <Box sx={{ display: "grid", gap: 2, width: "100%", maxWidth: 520 }}>
             <TextField
               label="Employee Code"
               value={searchEmpCode}
@@ -238,9 +252,9 @@ export default function EmpDocument() {
             <TextField
               label="Employee Name"
               value={employeeName}
-              disabled
               placeholder="Employee name will appear after search"
               size="small"
+              InputProps={{ readOnly: true }}
             />
           </Box>
             <Button variant="contained" onClick={fetchEmployeeDocuments} disabled={loading}>
@@ -254,22 +268,21 @@ export default function EmpDocument() {
               <UploadIcon sx={{ mr: 1 }} /> Upload / Update Document
             </Button>
           </Stack>
+            </Stack>
         </CardContent>
       </Card>
 
-      <Card>
-        <CardContent>
-          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" alignItems={{ xs: "flex-start", sm: "center" }} spacing={2} sx={{ mb: 2 }}>
-            <Typography variant="h6" fontWeight={700}>
-              Required Documents
-            </Typography>
+      <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
+        <Box sx={{ background: "linear-gradient(135deg, #0d9488 0%, #14b8a6 100%)", color: "#fff", p: 2.5 }}>
+          <Stack direction={{ xs: "column", sm: "row" }} justifyContent="space-between" spacing={1} alignItems={{ xs: "flex-start", sm: "center" }}>
+            <Typography variant="h6" fontWeight={800}>Required Documents</Typography>
             <Chip
               label={documents.length ? `${documents.filter((doc) => doc.isuploaded).length} / ${documents.length} uploaded` : "Pending review"}
-              color="primary"
-              variant="outlined"
+              sx={{ background: "rgba(255,255,255,0.18)", color: "#fff", fontWeight: 700 }}
             />
           </Stack>
-
+        </Box>
+        <CardContent sx={{ p: 3 }}>
           <TableContainer component={Paper} sx={{ borderRadius: 3 }}>
             <Table>
               <TableHead sx={{ backgroundColor: "#eef4ff" }}>

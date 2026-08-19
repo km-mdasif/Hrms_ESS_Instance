@@ -3,9 +3,9 @@
  * Handles document upload, download, and deletion
  */
 
-const { executeQuery } = require("../database/db");
+const { executeStoredProcedure } = require("../database/db");
 const { AppError } = require("../middleware/errorMiddleware");
-const { deleteFile, getFileStats } = require("../utils/fileManager");
+const { deleteFile } = require("../utils/fileManager");
 
 class DocumentService {
   /**
@@ -13,26 +13,16 @@ class DocumentService {
    */
   static async uploadEmpDocument(empCode, file, metadata) {
     try {
-      const params = {
-        empCode: String(empCode).trim(),
-        documentType: metadata.documentType || "General",
-        description: metadata.description || "",
-        filename: file.filename,
-        originalName: file.originalname,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        uploadedAt: new Date()
-      };
-
-      const result = await executeQuery(
-        `INSERT INTO EmpDocument (empCode, documentType, description, filename, originalName, fileSize, mimeType, uploadedAt)
-         VALUES (@empCode, @documentType, @description, @filename, @originalName, @fileSize, @mimeType, @uploadedAt)
-         SELECT SCOPE_IDENTITY() as id`,
-        params
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "upsert_emp_document",
+        empcode: String(empCode || "").trim(),
+        companycode: String(metadata?.companyCode || "01").trim() || "01",
+        documentname: metadata?.documentType || "General",
+        documentextension: file?.mimetype?.split("/")?.[1] || "bin"
+      });
 
       return {
-        id: result.recordset?.[0]?.id,
+        id: result.recordset?.[0]?.DocumentID || null,
         filename: file.filename,
         originalName: file.originalname
       };
@@ -48,10 +38,10 @@ class DocumentService {
    */
   static async getEmpDocuments(empCode) {
     try {
-      const result = await executeQuery(
-        `SELECT * FROM EmpDocument WHERE empCode = @empCode ORDER BY uploadedAt DESC`,
-        { empCode: String(empCode).trim() }
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_emp_documents",
+        empcode: String(empCode || "").trim()
+      });
 
       return result.recordset || [];
     } catch (error) {
@@ -67,10 +57,10 @@ class DocumentService {
     try {
       deleteFile(filePath);
 
-      await executeQuery(
-        `DELETE FROM EmpDocument WHERE id = @id`,
-        { id: docId }
-      );
+      await executeStoredProcedure("sp_webapi", {
+        operation: "delete_emp_document",
+        documentId: Number(docId)
+      });
 
       return { success: true };
     } catch (error) {
@@ -84,26 +74,18 @@ class DocumentService {
    */
   static async uploadCompanyDocument(file, metadata) {
     try {
-      const params = {
-        documentType: metadata.documentType || "General",
-        description: metadata.description || "",
-        filename: file.filename,
-        originalName: file.originalname,
-        fileSize: file.size,
-        mimeType: file.mimetype,
-        companyCode: metadata.companyCode || "01",
-        uploadedAt: new Date()
-      };
-
-      const result = await executeQuery(
-        `INSERT INTO CompanyDocument (documentType, description, filename, originalName, fileSize, mimeType, companyCode, uploadedAt)
-         VALUES (@documentType, @description, @filename, @originalName, @fileSize, @mimeType, @companyCode, @uploadedAt)
-         SELECT SCOPE_IDENTITY() as id`,
-        params
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "insert_company_document",
+        documentcode: metadata?.documentCode || "01",
+        documentname: metadata?.documentName || file?.originalname || "document",
+        documentextension: file?.mimetype?.split("/")?.[1] || "bin",
+        status: metadata?.status ?? 1,
+        expirydate: metadata?.expiryDate || null,
+        remainderon: metadata?.remainderOn || null
+      });
 
       return {
-        id: result.recordset?.[0]?.id,
+        id: result.recordset?.[0]?.DocumentID || null,
         filename: file.filename,
         originalName: file.originalname
       };
@@ -119,10 +101,10 @@ class DocumentService {
    */
   static async getCompanyDocuments(companyCode) {
     try {
-      const result = await executeQuery(
-        `SELECT * FROM CompanyDocument WHERE companyCode = @companyCode ORDER BY uploadedAt DESC`,
-        { companyCode }
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_company_documents",
+        companycode: String(companyCode || "01").trim() || "01"
+      });
 
       return result.recordset || [];
     } catch (error) {
@@ -138,10 +120,10 @@ class DocumentService {
     try {
       deleteFile(filePath);
 
-      await executeQuery(
-        `DELETE FROM CompanyDocument WHERE id = @id`,
-        { id: docId }
-      );
+      await executeStoredProcedure("sp_webapi", {
+        operation: "delete_company_document",
+        documentId: Number(docId)
+      });
 
       return { success: true };
     } catch (error) {
@@ -155,10 +137,9 @@ class DocumentService {
    */
   static async getDocumentTypes() {
     try {
-      const result = await executeQuery(
-        `SELECT DISTINCT documentType FROM DocumentType ORDER BY documentType`,
-        {}
-      );
+      const result = await executeStoredProcedure("sp_webapi", {
+        operation: "get_document_types"
+      });
 
       return result.recordset || [];
     } catch (error) {

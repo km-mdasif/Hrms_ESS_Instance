@@ -28,6 +28,19 @@ router.get("/visitors", async (req, res, next) => {
 });
 
 /**
+ * GET /visitor-entries
+ * Compatibility alias for visitor entry screen
+ */
+router.get("/visitor-entries", async (req, res, next) => {
+  try {
+    const visitors = await VisitorService.getVisitors(req.query);
+    res.json({ success: true, data: visitors });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
  * GET /visitors/count
  * Get visitor count
  */
@@ -39,6 +52,46 @@ router.get("/visitors/count", async (req, res, next) => {
       success: true,
       data: { count }
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /visitors
+ * Register new visitor (compatibility alias)
+ */
+router.post("/visitors", async (req, res, next) => {
+  try {
+    const { visitorName, visitorEmail, visitorPhone, purposeOfVisit, hostName, VisitorName, VisitorCode } = req.body;
+
+    if (!visitorName && !VisitorName) {
+      throw new AppError("Visitor name is required", 400);
+    }
+
+    if (!hostName && !VisitorCode) {
+      throw new AppError("Visitor code is required", 400);
+    }
+
+    const result = await VisitorService.registerVisitor(req.body);
+
+    res.status(201).json({
+      success: true,
+      data: result
+    });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * POST /visitor-entries/checkin
+ * Compatibility alias for visitor entry screen
+ */
+router.post("/visitor-entries/checkin", async (req, res, next) => {
+  try {
+    const result = await VisitorService.registerVisitor(req.body);
+    res.status(201).json({ success: true, data: result });
   } catch (error) {
     next(error);
   }
@@ -62,6 +115,19 @@ router.post("/visitors/register", async (req, res, next) => {
       success: true,
       data: result
     });
+  } catch (error) {
+    next(error);
+  }
+});
+
+/**
+ * PATCH /visitor-entries/:id/checkout
+ * Compatibility alias for visitor entry screen
+ */
+router.patch("/visitor-entries/:id/checkout", async (req, res, next) => {
+  try {
+    await VisitorService.checkoutVisitor(req.params.id);
+    res.json({ success: true, message: "Visitor checked out successfully" });
   } catch (error) {
     next(error);
   }
