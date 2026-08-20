@@ -507,6 +507,37 @@ export default function FieldExecutive({ username, userType = "employee" }) {
     return `${day}/${month}/${year} ${hours}:${minutes}`;
   };
 
+  const getFieldExecutiveImage = (record, type) => {
+    const image = type === "employee"
+      ? record?.employeeselfie_base64 || record?.employeeSelfieBase64 || record?.employeeSelfie || ""
+      : record?.clientselfie_base64 || record?.clientSelfieBase64 || record?.clientSelfie || "";
+    if (!image) return "";
+    return String(image).startsWith("data:") ? image : `data:image/jpeg;base64,${image}`;
+  };
+
+  const getFieldExecutiveMapUrl = (record) => {
+    const latitude = Number(record?.latitude);
+    const longitude = Number(record?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
+
+    const latitudeOffset = 0.00055;
+    const longitudeOffset = 0.00055 / Math.max(Math.cos((latitude * Math.PI) / 180), 0.2);
+    const bbox = [
+      longitude - longitudeOffset,
+      latitude - latitudeOffset,
+      longitude + longitudeOffset,
+      latitude + latitudeOffset,
+    ].join("%2C");
+    return `https://www.openstreetmap.org/export/embed.html?bbox=${bbox}&layer=mapnik&marker=${latitude}%2C${longitude}`;
+  };
+
+  const getFieldExecutiveGoogleMapUrl = (record) => {
+    const latitude = Number(record?.latitude);
+    const longitude = Number(record?.longitude);
+    if (!Number.isFinite(latitude) || !Number.isFinite(longitude)) return "";
+    return `https://www.google.com/maps/search/?api=1&query=${latitude},${longitude}`;
+  };
+
   return (
     <Box sx={{ display: "grid", gap: 3 }}>
       <Card sx={{ borderRadius: 4, overflow: "hidden", border: "1px solid #dfe7e5" }}>
@@ -781,25 +812,67 @@ export default function FieldExecutive({ username, userType = "employee" }) {
                         pt: index > 0 ? 1.5 : 0,
                       }}
                     >
-                      <Box sx={{ display: "flex", justifyContent: "space-between", alignItems: "start", gap: 2 }}>
-                        <Box sx={{ flex: 1 }}>
-                          <Typography variant="body2" fontWeight={600}>
-                            {record?.clientName || "Client"} • {record?.visitType === "checkout" ? "✓ Check Out" : "↓ Check In"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Work: {record?.natureOfWork || "Not specified"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Location: {record?.latitude != null && record?.longitude != null ? `${Number(record.latitude).toFixed(4)}, ${Number(record.longitude).toFixed(4)}` : "Not captured"}
-                          </Typography>
-                          <Typography variant="caption" color="text.secondary" display="block">
-                            Time: {formatFieldExecutiveTime(record)}
-                          </Typography>
-                          {record?.remarks && (
-                            <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontStyle: "italic" }}>
-                              Remarks: {record.remarks}
+                      <Box sx={{ overflowX: "auto", pb: 1 }}>
+                        <Box sx={{ display: "flex", alignItems: "stretch", gap: 2, minWidth: { xs: 760, md: "auto" } }}>
+                          <Box sx={{ minWidth: { xs: 250, md: 300 }, flex: 1 }}>
+                            <Typography variant="body2" fontWeight={600}>
+                              {record?.clientName || "Client"} • {record?.visitType === "checkout" ? "✓ Check Out" : "↓ Check In"}
                             </Typography>
-                          )}
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Work: {record?.natureOfWork || "Not specified"}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Location: {record?.latitude != null && record?.longitude != null ? `${Number(record.latitude).toFixed(4)}, ${Number(record.longitude).toFixed(4)}` : "Not captured"}
+                            </Typography>
+                            <Typography variant="caption" color="text.secondary" display="block">
+                              Time: {formatFieldExecutiveTime(record)}
+                            </Typography>
+                            {record?.remarks && (
+                              <Typography variant="caption" color="text.secondary" display="block" sx={{ mt: 0.5, fontStyle: "italic" }}>
+                                Remarks: {record.remarks}
+                              </Typography>
+                            )}
+                          </Box>
+
+                          {["employee", "attendance"].map((imageType) => {
+                            const imageUrl = getFieldExecutiveImage(record, imageType);
+                            return (
+                              <Box key={imageType} sx={{ width: 150, flexShrink: 0 }}>
+                                <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>
+                                  {imageType === "employee" ? "Employee Image" : "Attendance Image"}
+                                </Typography>
+                                {imageUrl ? (
+                                  <img src={imageUrl} alt={`${imageType} visit`} style={{ width: "150px", height: "105px", objectFit: "cover", borderRadius: 8, display: "block" }} />
+                                ) : (
+                                  <Box sx={{ width: 150, height: 105, display: "flex", alignItems: "center", justifyContent: "center", background: "#e2e8f0", borderRadius: 2 }}>
+                                    <PhotoCamera color="disabled" />
+                                  </Box>
+                                )}
+                              </Box>
+                            );
+                          })}
+
+                          <Box sx={{ width: 250, flexShrink: 0 }}>
+                            <Typography variant="caption" fontWeight={700} display="block" sx={{ mb: 0.5 }}>Location Map • 50 m radius</Typography>
+                            {getFieldExecutiveMapUrl(record) ? (
+                              <Box sx={{ position: "relative", width: 250, height: 105, overflow: "hidden", borderRadius: 2, border: "1px solid #bbf7d0", background: "#dcfce7" }}>
+                                <iframe
+                                  title={`Location map for ${record?.clientName || "visit"}`}
+                                  src={getFieldExecutiveMapUrl(record)}
+                                  style={{ width: "100%", height: "100%", border: 0 }}
+                                  loading="lazy"
+                                />
+                                <Box sx={{ position: "absolute", left: "50%", top: "50%", width: 72, height: 72, transform: "translate(-50%, -50%)", border: "2px solid #dc2626", borderRadius: "50%", background: "rgba(220, 38, 38, 0.12)", pointerEvents: "none" }} />
+                                <Button href={getFieldExecutiveGoogleMapUrl(record)} target="_blank" rel="noreferrer" size="small" sx={{ position: "absolute", bottom: 2, left: 2, minWidth: 0, px: 1, py: 0, background: "rgba(255,255,255,0.9)" }}>
+                                  Open map
+                                </Button>
+                              </Box>
+                            ) : (
+                              <Box sx={{ width: 250, height: 105, display: "flex", alignItems: "center", justifyContent: "center", background: "#e2e8f0", borderRadius: 2 }}>
+                                <Typography variant="caption" color="text.secondary">Location not captured</Typography>
+                              </Box>
+                            )}
+                          </Box>
                         </Box>
                       </Box>
                     </Box>

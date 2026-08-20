@@ -297,9 +297,9 @@ export default function Attendance({ onLogout }) {
   };
 
   // Check attendance count for today (informational only - allow multiple)
-  const checkAttendanceStatus = async () => {
+  const checkAttendanceStatus = async (employeeCodeOverride = empCode) => {
     try {
-      const empCodeVal = normalizeEmpCode(empCode);
+      const empCodeVal = normalizeEmpCode(employeeCodeOverride);
       if (!empCodeVal) {
         setUserMessage("Please enter employee code.");
         setMessageSeverity("error");
@@ -480,11 +480,8 @@ export default function Attendance({ onLogout }) {
         setLongitude(null);
         setAccuracy(null);
         setCameraRequested(false);
-        setTimeout(() => {
-          setCameraRequested(true);
-          checkAttendanceStatus();
-          fetchRecentAttendanceHistory(employeeCode);
-        }, 400);
+        await checkAttendanceStatus(employeeCode);
+        setCameraRequested(true);
       } else {
         setUserMessage("Save failed: " + (result?.message || "Unknown error"));
         setMessageSeverity("error");
